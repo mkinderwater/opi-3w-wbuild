@@ -1,0 +1,13 @@
+[Unit]
+Description=Write early Linux boot status to configuration partition
+After=local-fs.target
+Before=NetworkManager.service opi-3w-wbuild-firstboot.service
+RequiresMountsFor=/config
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/opi-3w-wbuild-firstboot --boot-status
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

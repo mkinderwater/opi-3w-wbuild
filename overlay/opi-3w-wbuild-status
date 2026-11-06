@@ -1,0 +1,24 @@
+#!/bin/bash
+set -u
+printf 'opi-3w-wbuild status\n'
+uname -a
+cat /etc/opi-3w-wbuild-release
+printf '\nProvisioning stages\n'
+for stage in configured; do
+    if test -f "/var/lib/opi-3w-wbuild/$stage"; then printf '%s: complete\n' "$stage"; else printf '%s: pending\n' "$stage"; fi
+done
+test ! -f /var/lib/opi-3w-wbuild/last-error || cat /var/lib/opi-3w-wbuild/last-error
+printf '\nNetwork\n'
+ip -brief address
+printf '\nStorage\n'
+findmnt / /config
+df -h / /config
+printf '\nServices\n'
+systemctl --no-pager --full status opi-3w-wbuild-boot-status opi-3w-wbuild-expand opi-3w-wbuild-firstboot NetworkManager ssh || true
+printf '\nRoot expansion\n'
+opi-3w-wbuild-expand --check || true
+test ! -f /var/lib/opi-3w-wbuild/resize-error || cat /var/lib/opi-3w-wbuild/resize-error
+printf '\nBoot milestones\n'
+cat /config/BOOT-STATUS.TXT || true
+printf '\nRecent setup log\n'
+journalctl -b -u opi-3w-wbuild-firstboot --no-pager -n 20

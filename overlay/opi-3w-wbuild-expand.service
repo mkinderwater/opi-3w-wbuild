@@ -1,0 +1,14 @@
+[Unit]
+Description=Expand the root partition and ext4 filesystem to the SD card size
+After=local-fs.target opi-3w-wbuild-boot-status.service
+Before=opi-3w-wbuild-firstboot.service
+RequiresMountsFor=/config
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/opi-3w-wbuild-expand
+TimeoutStartSec=240
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

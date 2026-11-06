@@ -1,0 +1,16 @@
+[Unit]
+Description=opi-3w-wbuild local first boot setup
+After=opi-3w-wbuild-boot-status.service opi-3w-wbuild-expand.service NetworkManager.service
+Wants=NetworkManager.service opi-3w-wbuild-expand.service
+RequiresMountsFor=/config
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/opi-3w-wbuild-firstboot
+TimeoutStartSec=180
+Restart=on-failure
+RestartSec=30
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+{
+  "ddk": "24.2.6603887",
+  "bvnc": "36.56.104.183",
+  "kernel_abi": "6.6.98-sun60iw2",
+  "userspace_url": "https://raw.githubusercontent.com/orangepi-xunlong/rk-rootfs-build/7b6d78d4f5eaefd5456777fbea5057a0876e8f4d/bullseye/xserver/xserver-xorg-img-bxm_1.21.1-2_arm64.deb",
+  "userspace_sha256": "c8e606db1abdea40a5b97f7905ea86901b50c5fe1b76a55356ab70dde3304c3a",
+  "kernel_repo": "https://github.com/orangepi-xunlong/linux-orangepi.git",
+  "kernel_commit": "2ac08e8c7cdc28abbdc5c9a9dd812f887ae9c79f"
+}

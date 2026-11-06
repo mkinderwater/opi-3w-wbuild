@@ -1,0 +1,30 @@
+--- a/services/system/rogue/rgx_sunxi/sunxi_platform.c
++++ b/services/system/rogue/rgx_sunxi/sunxi_platform.c
+@@ -767,7 +767,9 @@
+ extern void DIPrintf(const OSDI_IMPL_ENTRY *psEntry, const IMG_CHAR *pszFmt, ...);
+ static int _DebugDumpOppInfoDIShow(OSDI_IMPL_ENTRY *psEntry, void *pvData)
+ {
+-	int i = 0;
++#if defined(SUPPORT_PDVFS) || defined(SUPPORT_LINUX_DVFS)
++	unsigned int i = 0;
++#endif
+ 	struct sunxi_platform *sunxi_data;
+ 
+ 	sunxi_data = (struct sunxi_platform *)psEntry->pvPrivData;
+@@ -781,11 +783,15 @@
+ 		return -1;
+ 	}
+ 
++#if defined(SUPPORT_PDVFS) || defined(SUPPORT_LINUX_DVFS)
+ 	for (i = 0; i < sunxi_data->ui32OPPTableSize; i++) {
+-		DIPrintf(psEntry, "opp%d is %luHz---%lumV\n",
++		DIPrintf(psEntry, "opp%u is %luHz---%lumV\n",
+ 				  i, sunxi_data->asOPPTable[i].ui32Freq,
+ 				  sunxi_data->asOPPTable[i].ui32Volt / 1000);
+ 	}
++#else
++	DIPrintf(psEntry, "GPU OPP table unavailable: DVFS support disabled\n");
++#endif
+ 
+ 	return 0;
+ }

@@ -1,0 +1,8 @@
+#!/bin/bash
+set -uo pipefail
+result=0
+for test in opencl-check vulkan-check; do
+    echo "Running $test"
+    opi-3w-wbuild-gpu-run timeout --kill-after=5 60 "/opt/opi-3w-wbuild-powervr/bin/$test" || result=1
+done
+exit "$result"

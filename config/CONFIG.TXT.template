@@ -1,0 +1,11 @@
+# Orange Pi Zero 3W opi-3w-wbuild. Edit before first power-on.
+# Values are literal, not shell commands. Do not surround them with quotes.
+# SSID/PSK preserve spaces and '='. WPA/WPA2 personal only in initial build.
+# ROOT_PASSWORD: 8-64 characters. No default login is enabled.
+# Secrets are blanked after successful Wi-Fi and SSH provisioning.
+SSID=
+PSK=
+COUNTRY=CA
+HIDDEN=false
+TIMEZONE=America/Edmonton
+ROOT_PASSWORD=

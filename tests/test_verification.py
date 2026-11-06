@@ -79,6 +79,29 @@ class VerificationTests(unittest.TestCase):
             if modify:modify(system)
             report=v.Verification(system).run()
             return report,system.calls
+    def npu_fixture(self,system,success=True):
+        path=system.path('/opt/opi-3w-wbuild-npu/manifest.json');path.parent.mkdir(parents=True);path.write_text('{}')
+        old_run=system.run
+        def run(*args):
+            if args and args[0]=='opi-3w-wbuild-npu-test':
+                system.calls.append(args)
+                data=dict(status='PASS' if success else 'FAIL',npu_inference_validated=success,validation={'inferences':6,'cases':2})
+                if not success:data['error']='Numerical result mismatch'
+                return dict(code=0 if success else 1,output=json.dumps(data),elapsed_ms=1)
+            return old_run(*args)
+        system.run=run
+    def test_npu_success_is_reported_only_when_probe_validates_inference(self):
+        report,calls=self.exercise(lambda system:self.npu_fixture(system))
+        self.assertTrue(report['build_passed']);self.assertTrue(report['npu_inference_validated'])
+        self.assertEqual({c['name']:c['status'] for c in report['checks']}['npu_inference'],'PASS')
+    def test_npu_numerical_failure_fails_full_verification(self):
+        report,calls=self.exercise(lambda system:self.npu_fixture(system,False))
+        self.assertFalse(report['build_passed']);self.assertFalse(report['npu_inference_validated'])
+    def test_npu_does_not_execute_after_boot_integrity_failure(self):
+        def prepare(system):self.npu_fixture(system);system.hardware_ok=False
+        report,calls=self.exercise(prepare)
+        self.assertFalse(report['npu_inference_validated'])
+        self.assertFalse(any(c and c[0]=='opi-3w-wbuild-npu-test' for c in calls))
     def test_healthy_build_passes_without_claiming_npu(self):
         report,calls=self.exercise()
         self.assertTrue(report['build_passed'],report['checks'])

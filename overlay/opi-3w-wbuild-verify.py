@@ -43,7 +43,7 @@ class Verification:
     def __init__(self, system):
         self.system=system
         self.report={'schema':1,'created_utc':datetime.now(timezone.utc).isoformat(),
-                     'scope':'running opi-3w-wbuild and small GPU computations; NPU inference not tested',
+                     'scope':'running opi-3w-wbuild, small GPU computations and optional VIPLite LeNet inference',
                      'checks':[],'evidence':{}}
     def add(self,name,status,detail):
         self.report['checks'].append(dict(name=name,status=status,detail=detail))
@@ -193,12 +193,26 @@ class Verification:
         ok=result['code']==0 and canonical==EXPECTED_DDK
         self.add('loaded_gpu_ddk','PASS' if ok else 'FAIL',result['output'].strip())
     def npu(self):
-        self.report['npu']={'module_present':self.system.exists('/sys/module/vipcore'),
-                            'device_present':self.system.exists('/dev/vipcore'),
-                            'driver_version':self.system.text('/sys/module/vipcore/version').strip() if self.system.exists('/sys/module/vipcore/version') else None,
-                            'inference_validated':False,
-                            'reason':'Requires a matching VIPLite runtime and known NBG model with reference results'}
-        self.add('npu_inference','NOT_TESTED','GPU execution does not validate the NPU; readiness observations only')
+        self.report['npu_inference_validated']=False
+        self.report['npu']={'device_present':self.system.exists('/dev/vipcore'),
+                            'driver_modules_present':[name for name in ('sunxi_npu','vipcore') if self.system.exists('/sys/module/'+name)],
+                            'inference_validated':False}
+        if not self.system.exists('/opt/opi-3w-wbuild-npu/manifest.json'):
+            self.add('npu_inference','NOT_TESTED','VIPLite inference runtime is not installed')
+            return
+        required=('board','debian','kernel','boot_root','vendor_boot','runtime_integrity','hardware_integrity')
+        states={c['name']:c['status'] for c in self.report['checks']}
+        if any(states.get(name)!='PASS' for name in required):
+            self.add('npu_inference','NOT_TESTED','NPU execution blocked by board, kernel or integrity failure')
+            return
+        result=self.command('npu_test','opi-3w-wbuild-npu-test','--json')
+        data=json.loads(result['output']) if result['output'].strip() else {}
+        ok=(result['code']==0 and data.get('status')=='PASS' and data.get('npu_inference_validated') is True
+            and data.get('validation',{}).get('inferences')==6 and data.get('validation',{}).get('cases')==2)
+        self.report['npu']['test']=data
+        self.report['npu']['inference_validated']=ok
+        self.report['npu_inference_validated']=ok
+        self.add('npu_inference','PASS' if ok else 'FAIL','Six alternating VIPLite LeNet runs matched independent CPU references and reported hardware cycles' if ok else data.get('error','NPU inference verification failed'))
     def run(self):
         for name,operation in (('identity',self.identity),('vendor_boot',self.ramdisk),('provision',self.provision),('network',self.network),('storage',self.storage),('integrity',self.integrity)):
             self.attempt(name,operation)
@@ -214,16 +228,16 @@ class Verification:
         try:self.report['after_compute']=self.snapshot()
         except Exception as error:self.add('post_compute_snapshot','WARN',str(error))
         result=self.command('kernel_log','dmesg','--color=never')
-        self.report['evidence']['kernel_log']['output']='\n'.join(line for line in result['output'].splitlines() if any(k in line.lower() for k in ('pvr','rgx','vipcore','gpu','thermal','out of memory')))
+        self.report['evidence']['kernel_log']['output']='\n'.join(line for line in result['output'].splitlines() if any(k in line.lower() for k in ('pvr','rgx','vipcore','npu','gpu','thermal','out of memory')))
         self.report['build_passed']=all(c['status']!='FAIL' for c in self.report['checks'])
-        self.report['npu_inference_validated']=False
+        self.report.setdefault('npu_inference_validated',False)
         return self.report
 
 
 def summary(report):
     lines=['opi-3w-wbuild verification: '+('PASS' if report['build_passed'] else 'FAIL')]
     lines += [f"{c['status']:10} {c['name']}: {c['detail']}" for c in report['checks']]
-    lines += ['NPU inference: NOT TESTED. Small GPU success does not prove model compatibility or sustained performance.']
+    lines += ['NPU inference: '+('VERIFIED for the supplied LeNet test only.' if report.get('npu_inference_validated') else 'NOT VERIFIED.')+' This does not establish general model compatibility or sustained performance.']
     return '\n'.join(lines)+'\n'
 
 

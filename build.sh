@@ -75,6 +75,7 @@ chroot "$R" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-r
     python3 iw wireless-regdb bluez openssh-server procps iproute2 tzdata ca-certificates kmod e2fsprogs util-linux
 chroot "$R" /bin/sh -c 'command -v partx && command -v resize2fs && command -v udevadm && command -v findmnt'
 bash "$BASE/gpu/install.sh" "$BASE" "$R" "$H" "$WORK" "$ABI"
+bash "$BASE/npu/install.sh" "$R"
 install -m755 "$BASE/overlay/firstboot.py" "$R/usr/local/sbin/opi-3w-wbuild-firstboot"
 install -m755 "$BASE/overlay/expand.py" "$R/usr/local/sbin/opi-3w-wbuild-expand"
 install -m755 "$BASE/overlay/opi-3w-wbuild-status" "$R/usr/local/sbin/opi-3w-wbuild-status"
@@ -98,7 +99,7 @@ chroot "$R" systemctl enable opi-3w-wbuild-boot-status opi-3w-wbuild-expand opi-
 chroot "$R" systemctl set-default multi-user.target
 printf 'opi-3w-wbuild\n' > "$R/etc/hostname"
 printf '127.0.0.1 localhost\n::1 localhost ip6-localhost\n' > "$R/etc/hosts"
-printf 'opi-3w-wbuild 0.7.2\nFresh Debian 13 ARM64; verified vendor boot path; kernel %s\n' "$ABI" > "$R/etc/opi-3w-wbuild-release"
+printf 'opi-3w-wbuild 0.7.5\nFresh Debian 13 ARM64; verified vendor boot path; kernel %s\n' "$ABI" > "$R/etc/opi-3w-wbuild-release"
 cp "$WORK/"{donor-layout.json,layout.json,kernel-header.txt,dtb-compatible.txt,vendor-boot.json,board-profile.json} "$R/usr/share/opi-3w-wbuild/"
 sha256sum "$DONOR" > "$R/usr/share/opi-3w-wbuild/hardware-bundle.sha256"
 chroot "$R" dpkg-query -W > "$R/usr/share/opi-3w-wbuild/packages.txt"

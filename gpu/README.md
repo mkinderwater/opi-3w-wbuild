@@ -1,7 +1,7 @@
 # PowerVR compute runtime
 
-opi-3w-wbuild 0.7.2 uses fresh Debian 13 main userspace with the working vendor boot bundle. BUILD.bat produces
-`out/opi-3w-wbuild-0.7.2.img.gz`. See the main README for configuration and
+opi-3w-wbuild 0.7.5 uses fresh Debian 13 main userspace with the working vendor boot bundle. BUILD.bat produces
+`out/opi-3w-wbuild-0.7.5.img.gz`. See the main README for configuration and
 BOOT-STATUS.TXT diagnostics.
 
 The exact package/source URLs, hashes, kernel ABI, DDK and BVNC are pinned in

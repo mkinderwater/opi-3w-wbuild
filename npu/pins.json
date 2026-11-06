@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/ZIFENG278/ai-sdk",
+  "commit": "fc90006d0f6569da2f6726c2d8395877686f5aca",
+  "kernel_abi": "6.6.98-sun60iw2",
+  "expected_cid": 268435515,
+  "files": [
+    {
+      "source": "viplite-tina/lib/aarch64-none-linux-gnu/v2.0/libVIPhal.so",
+      "target": "lib/libVIPhal.so",
+      "sha256": "3ed5357b26bd6c4fb68fbdc0b21d637227dda711d1fe67b9e28accdc48bb11f2",
+      "bytes": 39416
+    },
+    {
+      "source": "viplite-tina/lib/aarch64-none-linux-gnu/v2.0/libNBGlinker.so",
+      "target": "lib/libNBGlinker.so",
+      "sha256": "82f049b0ed0065dd4d443e37eeb1edfcbef24457c9c24e36170d64d5b748ca66",
+      "bytes": 174728
+    },
+    {
+      "source": "viplite-tina/lib/aarch64-none-linux-gnu/v2.0/inc/vip_lite.h",
+      "target": "sdk/vip_lite.h",
+      "sha256": "33fee8f985210cb34f14b7e2b0614096e6972718f87d8107497521d561d9df41",
+      "bytes": 44351
+    },
+    {
+      "source": "viplite-tina/lib/aarch64-none-linux-gnu/v2.0/inc/vip_lite_common.h",
+      "target": "sdk/vip_lite_common.h",
+      "sha256": "d807216e8376de4729de074ecb1b91cd5ccab279ef18543acd3adb61b1a1518e",
+      "bytes": 8117
+    },
+    {
+      "source": "examples/lenet/model/v3/lenet.nb",
+      "target": "model/lenet-a733.nb",
+      "sha256": "e5ecb51bdbea030e3a2c21af7f03df702b0e89e55b15fb9115a054382077136b",
+      "bytes": 444152
+    },
+    {
+      "source": "examples/lenet/input_data/lenet.dat",
+      "target": "model/sdk-zero.u8",
+      "sha256": "94914cb610401a7685447ec268c0e14d4c78b156997ab3fc8c44d27bd7221591",
+      "bytes": 784
+    }
+  ]
+}

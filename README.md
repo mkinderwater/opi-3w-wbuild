@@ -15,6 +15,7 @@ The project was developed and tested on the **1 GB Orange Pi Zero 3W**. It is in
 - First-boot machine identity, SSH host keys and NetworkManager WiFi provisioning.
 - Automatic root partition and ext4 expansion to the card's remaining capacity.
 - An isolated PowerVR runtime with actual numerical OpenCL and Vulkan tests.
+- A candidate A733 VIPLite runtime with a small LeNet NPU inference/reference test.
 - Boot milestones, integrity checks and saved verification reports.
 - A boot-file allocation workaround developed while diagnosing an image that stopped at the vendor bootloader splash screen.
 
@@ -108,15 +109,15 @@ BUILD.bat
 
 `BUILD.bat` also performs extraction automatically if only `inputs/vendor.img` is present. When the hardware bundle exists, it takes precedence over the donor image.
 
-For version 0.7.2, the output is:
+For version 0.7.5, the output is:
 
 ```text
-out/opi-3w-wbuild-0.7.2.img.gz
-out/opi-3w-wbuild-0.7.2.img.gz.sha256
+out/opi-3w-wbuild-0.7.5.img.gz
+out/opi-3w-wbuild-0.7.5.img.gz.sha256
 out/build.log
 ```
 
-Build workspaces are retained under `~/opi-3w-wbuild/build-0.7.2-*` inside the selected WSL distribution. Filesystem assembly workspaces are retained under `/var/tmp/opi-3w-wbuild.*`. These paths are printed in the log.
+Build workspaces are retained under `~/opi-3w-wbuild/build-0.7.5-*` inside the selected WSL distribution. Filesystem assembly workspaces are retained under `/var/tmp/opi-3w-wbuild.*`. These paths are printed in the log.
 
 The launcher installs host dependencies and registers ARM64 execution support. It builds inside the Linux filesystem, then exports the compressed output to the Windows project folder.
 
@@ -262,11 +263,38 @@ Sparse storage of the **outer host `.img` file** is a separate issue. This worka
 | `opi-3w-wbuild-status` | Runtime status, relevant service state and recent setup logs |
 | `opi-3w-wbuild-verify` | Board, OS, boot, storage, networking, service, integrity and actual GPU computation checks |
 | `opi-3w-wbuild-gpu-test` | Standalone numerical OpenCL and Vulkan checks |
+| `opi-3w-wbuild-npu-test` | Direct VIPLite LeNet inference, hardware profiling and independent reference comparison |
 | `opi-3w-wbuild-gpu-run COMMAND` | Run a command with the isolated PowerVR library/ICD environment |
 
 The image enables `opi-3w-wbuild-boot-status.service`, `opi-3w-wbuild-expand.service` and `opi-3w-wbuild-firstboot.service`, alongside the required networking and SSH services.
 
 The PowerVR module is kept out of automatic early loading. Explicit GPU commands load it after boot. Debian provides the API loaders; matched vendor libraries and firmware provide the device runtime. No GPU clock/voltage overlay or feature-faking Vulkan layer is enabled.
+
+## NPU bring-up
+
+Version 0.7.5 includes a pinned VIPLite 2.0 runtime and A733/v3 LeNet model.
+The NPU probe prepares the network before attaching input/output buffers,
+as required by VIPLite, and decodes the model's FP16 output tensors. An existing runtime can be updated with
+`bash npu/update.sh` on the board; see [npu/README.md](npu/README.md).
+The explicit test alternates two inputs for six inferences, checks hardware identity
+and positive inference cycle counts, and compares the output probabilities with
+independently reproduced CPU references. It has no CPU inference fallback.
+
+On a new image:
+
+```bash
+opi-3w-wbuild-npu-test
+```
+
+For the already working card, copy the repository's `npu` folder to `/root/npu`,
+then run `bash /root/npu/install.sh` and `opi-3w-wbuild-npu-test`. No reflash is
+needed. Installation downloads only the pinned runtime/model/header assets,
+compiles the probe, and does not initialize the NPU during installation.
+
+**NPU board validation remains pending.** A PASS must come from the actual board;
+SDK discovery and host tests are not hardware execution. Full verification runs
+the NPU test when its runtime is installed, and records a failure rather than
+claiming NPU support when that test fails. See [NPU setup, validation and credits](npu/README.md).
 
 ## Verify the running board
 
@@ -302,9 +330,9 @@ The pre-rename 0.7.0 diagnostic image with dense boot files passed board verific
 - PowerVR DDK identity.
 - OpenCL kernel execution and Vulkan compute shader execution with verified numerical results.
 
-The 0.7.2 builder includes that normalization procedure and the project rename. Its **84 host tests passed**, with two GPU SDK-dependent test groups skipped. The exact fresh 0.7.2 output still needs its own complete WSL build and board test.
+The 0.7.5 builder includes that normalization procedure, the project rename and the candidate NPU test. Host tests cover preparation, API sequencing and verification; SDK-dependent groups skip when their development headers are absent. The exact fresh 0.7.5 output still needs its own complete WSL build and board test.
 
-NPU inference, microphone capture, Bluetooth operation, VPU acceleration, desktop composition and sustained AI workloads are not validated by these tests. GPU compute success does not establish NPU support or application compatibility.
+NPU inference on the newly added candidate runtime, microphone capture, Bluetooth operation, VPU acceleration, desktop composition and sustained AI workloads still need board validation. GPU compute success does not establish NPU support or application compatibility.
 
 ## Logs and troubleshooting
 
@@ -351,7 +379,7 @@ This project benefited from the following upstream work and public references:
 | [davidhfrankelcodes / pvr-a733-armbian](https://github.com/davidhfrankelcodes/pvr-a733-armbian) | Reference for A733 PowerVR bring-up, real workload testing and documented limitations; its feature-strip layer and clock overlay are not enabled here |
 | [mkinderwater / bpi-zero-wbuild](https://github.com/mkinderwater/bpi-zero-wbuild) | The earlier working builder used as the reference for root partition growth, `partx` refresh, `resize2fs`, and nonfatal retry behavior |
 
-The community repositories above were consulted during development. Their inclusion is acknowledgment of useful published work, not a claim of direct collaboration or endorsement. Their installer scripts are not run by this builder. The boot-allocation investigation and workaround described here were developed and tested in this project.
+The community repositories above were consulted during development. Their inclusion is acknowledgment of useful published work, not a claim of direct collaboration or endorsement. Their installer scripts are not run by this builder. The boot-allocation investigation and workaround described here were developed and tested in this project. NPU references and SDK attribution are listed in [npu/README.md](npu/README.md).
 
 Useful upstream source links:
 

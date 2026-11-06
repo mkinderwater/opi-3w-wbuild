@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "model": "SDK LeNet v3 / A733",
+  "input_normalization": "uint8 / 255",
+  "reference_engines": [
+    "OpenCV 4.10.0 CPU DNN",
+    "independent NumPy implementation of Caffe LeNet layers"
+  ],
+  "source_weights_sha256": "2b028874af17db0c0f566737ea7e53c7c6d005cb21013facdf65b31eb4d53f19",
+  "source_prototxt_sha256": "c8748f64533c5b8e509667e70725d58bb2369fb56e9cc13826a1d83202a2da54",
+  "absolute_tolerance": 0.03,
+  "cases": [
+    {
+      "name": "sdk-zero",
+      "input_sha256": "94914cb610401a7685447ec268c0e14d4c78b156997ab3fc8c44d27bd7221591",
+      "scores": [
+        0.9995480179786682,
+        6.537938475048577e-07,
+        9.557529119774699e-05,
+        1.1233122876319612e-07,
+        1.459644778378788e-07,
+        0.00014217580610420555,
+        0.0001374268322251737,
+        9.211213182425126e-06,
+        1.0278625268256292e-05,
+        5.653411062667146e-05
+      ],
+      "class_index": 0,
+      "reference_agreement_max_abs_error": 1.3096723705530167e-10
+    },
+    {
+      "name": "synthetic-seven",
+      "input_sha256": "ac6d1ee23bdffedd8d2ae5c0068c451ead395708d7a478a6ccdb46e354685cc1",
+      "scores": [
+        4.808500193576037e-07,
+        1.1433423878770554e-06,
+        0.003464075969532132,
+        0.0014792493311688304,
+        2.292617207189096e-09,
+        4.4190619519213215e-06,
+        2.6793584018136585e-10,
+        0.995028555393219,
+        9.247635716747027e-06,
+        1.2816096386814024e-05
+      ],
+      "class_index": 7,
+      "reference_agreement_max_abs_error": 1.1920928955078125e-07
+    }
+  ]
+}

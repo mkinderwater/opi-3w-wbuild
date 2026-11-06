@@ -1,225 +1,366 @@
-# opi-3w-wbuild 0.7.2
+# opi-3w-wbuild
 
-Fresh Debian 13 ARM64, using hardware assets extracted from the known working
-A733 Zero 3W vendor image. Future builds use a compressed hardware archive.
-The vendor root filesystem is never copied into the new image.
+Build a compact **Debian 13 ARM64** microSD image for the **Orange Pi Zero 3W, Allwinner A733**, from Windows using WSL2.
 
-## Naming
+The builder extracts the working hardware stack from an original Orange Pi image, builds fresh Debian userspace, adds a matched PowerVR compute runtime, and produces a compressed image ready to flash. A reusable hardware bundle removes the need to keep copying a complete vendor image into each build.
 
-The project and build outputs are named `opi-3w-wbuild` as of 0.7.2.
-The image is `opi-3w-wbuild-0.7.2.img.gz`; WSL workspaces are under
-`~/opi-3w-wbuild/build-0.7.2-*`. After flashing this release, commands are
-`opi-3w-wbuild-verify`, `opi-3w-wbuild-status`, `opi-3w-wbuild-expand` and
-`opi-3w-wbuild-gpu-test`. Services, release file and state/report paths use the
-same prefix. This is a fresh-image rename, not an in-place upgrade of existing cards.
-Reuse the existing `inputs/zero3w-hardware.tar.gz` hardware bundle.
+The project was developed and tested on the **1 GB Orange Pi Zero 3W**. It is intended as a small, reusable starting point for appliances and other projects.
 
-## Windows build
+## What it provides
 
-1. Extract this ZIP into a new folder. Use Debian under WSL2.
-2. Put the original working, uncompressed vendor image in `inputs/vendor.img`.
-   Do not use a generated opi-3w-wbuild image as the donor.
-3. If needed, place matching headers in `inputs/kernel-headers.deb`. Otherwise,
-   the extractor retains the vendor's `/opt/linux-headers*sun60iw2*.deb`.
-4. Run `EXTRACT.bat` once. It creates `inputs/zero3w-hardware.tar.gz` and checksum.
-5. Run `BUILD.bat`. The archive takes precedence over `vendor.img`.
-6. Flash `out/opi-3w-wbuild-0.7.2.img.gz` and edit its CONFIG.TXT.
+- Fresh Debian 13 (`trixie`) ARM64 userspace created with `debootstrap`.
+- The vendor bootloader, kernel, initramfs, selected Zero 3W DTB, modules and firmware.
+- A default **2 GiB raw image**, compressed for distribution and flashing.
+- A Windows-readable configuration partition for WiFi, timezone and initial root credentials.
+- First-boot machine identity, SSH host keys and NetworkManager WiFi provisioning.
+- Automatic root partition and ext4 expansion to the card's remaining capacity.
+- An isolated PowerVR runtime with actual numerical OpenCL and Vulkan tests.
+- Boot milestones, integrity checks and saved verification reports.
+- A boot-file allocation workaround developed while diagnosing an image that stopped at the vendor bootloader splash screen.
 
-BUILD.bat also performs extraction automatically when only vendor.img is present.
-The original image remains untouched. After validating a bundle/build, you can
-archive the original elsewhere. Reusing the bundle does not need it. Keep the
-bundle with its checksum. Changing donors requires moving the existing bundle
-before extracting again. Extraction size is reported on disk; it depends on the
-vendor's firmware and kernel development package.
+**The Linux kernel and U-Boot are retained, not rebuilt.** The PowerVR kernel module is compiled when a matching module is unavailable.
 
-PowerShell options:
+## Supported hardware and software
+
+| Component | Current target |
+| --- | --- |
+| Board | Orange Pi Zero 3W, Allwinner A733; tested with 1 GB RAM |
+| Userspace | Debian 13 ARM64 |
+| Vendor kernel ABI | `6.6.98-sun60iw2` |
+| Base DTB | `allwinner/sun60i-a733-orangepi-zero3w.dtb` |
+| GPU | Imagination PowerVR B-Series BXM-4-64 |
+| PowerVR DDK | `24.2.6603887` |
+| BVNC | `36.56.104.183` |
+| Main build environment | Windows with Debian under WSL2 |
+| Initial image size | 2048 MiB; configurable through the PowerShell launcher |
+
+This is a narrow, matched hardware stack. Other kernels, donor layouts, boards and RAM variants have not been established as compatible. This is the A733 **Zero 3W**, not the H618 Zero 3, Zero 2W, or a Radxa Zero board.
+
+Exact PowerVR package URLs, checksums and the kernel source commit are recorded in [`gpu/pins.json`](gpu/pins.json). The current kernel source pin is `2ac08e8c7cdc28abbdc5c9a9dd812f887ae9c79f` from Orange Pi's kernel repository.
+
+## Requirements
+
+- WSL2 with a Debian distribution and a working Linux user account with `sudo` access.
+- Internet access for Debian packages, pinned source and the PowerVR package.
+- Space in the WSL Linux filesystem for the build tree, temporary compiler/source files and output images. The 2 GiB output size is not the total workspace requirement.
+- An original, uncompressed vendor `.img` that already boots on the target board.
+- A microSD card and an imaging application. Armbian Imager was used during development.
+
+The expected donor uses an MBR partition table with a single ext4 root partition numbered 1, starting at 32 MiB. The extractor and assembler validate the boot payloads, selected DTB, kernel ABI and known ext4 profile. Use the original vendor image, not an image previously generated by this builder.
+
+A matching kernel header package is needed when the GPU module must be built. It can come from the donor's `/opt/linux-headers*sun60iw2*.deb`, or from `inputs/kernel-headers.deb`.
+
+## Build on Windows
+
+### 1. Prepare WSL2
+
+Install Debian if it is not already present, complete its first-run user setup, then check the distribution name and WSL version:
 
 ```powershell
-.\Build.ps1 -Distribution Debian -ExtractOnly
-.\Build.ps1 -Distribution Debian -DonorImage 'D:\assets\zero3w-hardware.tar.gz'
-.\Build.ps1 -Distribution Debian -ImageMiB 4096
+wsl --install -d Debian
+wsl --list --verbose
 ```
 
-Native Linux, after setup-wsl.sh:
+The launcher defaults to the distribution named `Debian`. It selects that distribution explicitly, so the default WSL distribution does not determine where the build runs.
 
-```bash
-sudo bash extract-hardware.sh inputs/vendor.img inputs/zero3w-hardware.tar.gz
-sudo bash build.sh inputs/zero3w-hardware.tar.gz /home/matthew/opi-3w-wbuild.img 2048
-```
+### 2. Prepare the inputs
 
-## What is extracted
-
-| Asset | Purpose |
-| --- | --- |
-| Raw reserved boot area, including boot0 and boot package | Preserve the working vendor bootloader at its original offsets |
-| Entire /boot tree and symlinks | Kernel, initramfs, scripts and DTBs |
-| Matching modules, firmware and module configuration | Board peripherals and hardware support |
-| Matching kernel header package, when available | Rebuild the PowerVR module; excluded from the final OS |
-| Hashes, selected DTB profile and original filesystem profile | Validate extraction and assembly |
-
-No vendor accounts, home directories, package database, general applications or
-services are extracted. The retained vendor initramfs contains early boot
-userspace. Modules and firmware are kept broadly for repurposing the board.
-PowerVR userspace is still downloaded separately from the pinned official package;
-the small builder ZIP does not redistribute those binaries. Builds need network
-access for Debian, PowerVR and pinned source inputs.
-
-The original donor is mounted read-only during extraction. Archives have an
-allowlisted inventory, file hashes, boot payload checksums and guarded extraction.
-Cached builds do not copy the full vendor image into the WSL workspace. Generated
-Linux donor copies are removed after successful extraction; extraction workspaces
-retain only staged hardware assets and metadata for diagnosis.
-
-## Compact image and full-card expansion
-
-The default raw image is 2048 MiB. A fresh ext4 filesystem is populated directly
-from the new Debian tree. Explicit ext4 features, 4 KiB blocks, 256-byte inodes
-and the original UUID match the known vendor profile. Host defaults cannot add
-64bit, metadata checksums or orphan_file. Unsupported donor profiles fail closed.
-There are no discarded vendor filesystem blocks to carry into the output.
-
-Boot reserve occupies 0-32 MiB, FAT32 /config 32-96 MiB, then expandable ext4 root.
-Root remains partition 1 for vendor scripts; FAT is partition 2 but physically
-precedes root. Boot code, disk ID and raw boot payloads are checked after assembly.
-Only root geometry and the second MBR entry change.
-
-opi-3w-wbuild-expand grows the root partition count, refreshes kernel geometry using
-partx, then runs resize2fs. It preserves the partition start and UUID. This follows
-the working BPI builder sequence. Failure is recorded and retried next boot;
-WiFi and SSH provisioning continue. Verification checks actual partition and
-filesystem sizes rather than trusting a completion marker.
-
-As root, without sudo:
-
-```bash
-opi-3w-wbuild-expand --check
-lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINTS
-df -h /
-opi-3w-wbuild-verify
-```
-
-0.5.0 passed board tests for fresh Debian, WiFi, SSH and actual OpenCL/Vulkan
-compute. Initial 0.7.0 did not boot. A diagnostic copy with boot files rewritten
-to fully allocated files booted on the board with the same 2 GiB image, boot
-payloads, root UUID and relocated root. The kernel changed from 347 sparse holes
-and an extent-tree block to one continuous extent. A mount-only control was also
-produced but its board result is pending; this does not yet isolate holes from
-journal initialization or extent layout as the exact cause.
-
-0.7.2 integrates that normalization after mkfs population: mount only the newly
-created root.ext4, preallocate/write every regular boot file, verify no holes,
-check unchanged hashes, symlinks, owners and modes, then unmount and check the
-filesystem. Boot code and partition geometry are unaffected. It records an audit
-under /usr/share/opi-3w-wbuild/boot-allocation.json and retains detailed inode
-reports beside root.ext4 in the Linux workspace. Sparse storage of the outer raw
-image is fine; sparse file allocation inside /boot is the difference addressed.
-
-Reuse the existing inputs/zero3w-hardware.tar.gz; no donor extraction is needed.
-The exact fresh 0.7.2 build still needs a complete WSL build and board verification.
-The successful diagnostic image passed opi-3w-wbuild-verify on the board, including
-WiFi, SSH, actual OpenCL/Vulkan computation, hardware/runtime hashes, no failed
-units, and full-card expansion. Root starts at sector 196608 (96 MiB), expands to
-499974144 sectors on a 500170752-sector card, and df -h reports a 235G ext4 root.
-The mount-only control result and NPU inference remain untested. Keep this working
-image as the checkpoint.
-
-## Configuration and boot diagnostics
-
-Edit CONFIG.TXT on the flashed card:
+Clone or download this repository, then place the original working image at:
 
 ```text
+inputs/vendor.img
+```
+
+If the donor does not provide matching headers, also place the header package at:
+
+```text
+inputs/kernel-headers.deb
+```
+
+Boot the original stock image first and check its published vendor checksum before using it as a donor. The builder's internal checks do not replace verifying the source of the image.
+
+### 3. Extract the hardware bundle
+
+Run:
+
+```text
+EXTRACT.bat
+```
+
+This creates:
+
+```text
+inputs/zero3w-hardware.tar.gz
+inputs/zero3w-hardware.tar.gz.sha256
+```
+
+The original image is mounted read-only. Extraction keeps the raw reserved boot area, `/boot`, kernel modules, firmware, module configuration, matching packaged headers when available, and validation metadata.
+
+It excludes vendor accounts, home directories, the package database and general application services. The retained vendor initramfs still contains the early userspace required by that boot path.
+
+### 4. Build the new image
+
+Run:
+
+```text
+BUILD.bat
+```
+
+`BUILD.bat` also performs extraction automatically if only `inputs/vendor.img` is present. When the hardware bundle exists, it takes precedence over the donor image.
+
+For version 0.7.2, the output is:
+
+```text
+out/opi-3w-wbuild-0.7.2.img.gz
+out/opi-3w-wbuild-0.7.2.img.gz.sha256
+out/build.log
+```
+
+Build workspaces are retained under `~/opi-3w-wbuild/build-0.7.2-*` inside the selected WSL distribution. Filesystem assembly workspaces are retained under `/var/tmp/opi-3w-wbuild.*`. These paths are printed in the log.
+
+The launcher installs host dependencies and registers ARM64 execution support. It builds inside the Linux filesystem, then exports the compressed output to the Windows project folder.
+
+### 5. Reuse the bundle
+
+Future builds need `inputs/zero3w-hardware.tar.gz`, not another full donor copy. Keep its checksum with it. After validating the extracted bundle and a resulting board boot, the original vendor image can be archived elsewhere.
+
+To switch donors, move the existing bundle and checksum out of `inputs` before extracting again. The hardware bundle remains reusable across the project rename.
+
+Existing output images are not overwritten. Move previous image/checksum outputs before building the same release again. Avoid simultaneous builds in the same project folder. Separate folders get separate Linux workspaces, but host package setup still shares the selected WSL distribution's package manager.
+
+### PowerShell options
+
+```powershell
+# Choose the WSL distribution explicitly.
+.\Build.ps1 -Distribution Debian
+
+# Extract only.
+.\Build.ps1 -Distribution Debian -ExtractOnly
+
+# Use a hardware bundle at another Windows path.
+.\Build.ps1 -DonorImage 'D:\assets\zero3w-hardware.tar.gz'
+
+# Produce a larger initial raw image, still expandable at first boot.
+.\Build.ps1 -ImageMiB 4096
+```
+
+`-DonorImage` accepts either an original donor `.img` or a generated hardware `.tar.gz` bundle. `-ImageMiB` accepts 2048 through 32768 MiB.
+
+## Build directly on Linux
+
+The same Linux scripts can be invoked without the Windows launcher. Run from the repository root on a compatible Debian/Ubuntu host with working loop mounts, chroot and ARM64 execution support:
+
+```bash
+sudo bash setup-wsl.sh
+sudo bash extract-hardware.sh inputs/vendor.img inputs/zero3w-hardware.tar.gz
+sudo bash build.sh inputs/zero3w-hardware.tar.gz "$HOME/opi-3w-wbuild.img" 2048
+```
+
+The output path must be a new regular image file in the Linux filesystem. The builder rejects output beneath `/mnt`. The native script produces a raw `.img` and its checksum; compression/export is handled separately by the Windows launcher.
+
+## Flash and configure
+
+Flash the generated image to the microSD card, then open `CONFIG.TXT` on its Windows-readable configuration partition before the first boot:
+
+```ini
 SSID=Your WiFi network
 PSK=Your WiFi password
 COUNTRY=CA
 HIDDEN=false
 TIMEZONE=America/Edmonton
-ROOT_PASSWORD=Your unique root password
+ROOT_PASSWORD=Choose a unique root password
 ```
 
-Use literal values, without quotes. WPA/WPA2 Personal with IPv4 DHCP is supported.
-SSID is 1-32 UTF-8 bytes. PSK is 8-63 printable ASCII characters. The root password
-is 8-64 characters excluding colon and line breaks. The timezone must exist in
-the installed tzdata package. There is no vendor account or default login password.
-Root starts locked; SSH waits for credentials to be committed by provisioning.
+Use literal values without surrounding quotes. The initial setup supports WPA/WPA2 Personal with IPv4 DHCP. SSIDs must be 1–32 UTF-8 bytes; WiFi passwords must be 8–63 printable ASCII characters. Root passwords must be 8–64 characters without a colon or line break. Use an installed timezone name.
 
-First boot generates the machine identity and SSH host keys. The early status
-service writes BOOT-STATUS.TXT before network provisioning. Setup verifies root
-credentials and SSH before attempting Wi-Fi. It detects the NetworkManager Wi-Fi
-interface and writes a private profile, rather than assuming wlan0. Retries reuse
-the connection UUID. A regulatory-domain error is recorded without blocking SSH.
+There is no default login password. Root starts locked, and SSH waits for provisioning to commit the credentials. The first boot generates the machine ID and SSH host keys, detects the NetworkManager WiFi interface, creates the private connection profile, and writes progress to `BOOT-STATUS.TXT`.
 
-| BOOT-STATUS.TXT stage | Meaning |
-| --- | --- |
-| BUILD-ONLY | The early Linux status service has not updated FAT yet |
-| LINUX_STARTED | Linux reached systemd and mounted the config partition |
-| SSH_READY | Root credentials and SSH setup completed |
-| WAITING_FOR_WIFI_DEVICE | Looking for a NetworkManager Wi-Fi device |
-| WIFI_PROFILE_READY | Private Wi-Fi profile written |
-| WAITING_FOR_DHCP | Activating Wi-Fi and waiting for an address |
-| CONFIGURED | IPv4 obtained; the address is included |
-| SETUP_FAILED | Failed phase and error category, without passwords or raw command output |
-| PREVIOUSLY_CONFIGURED | A later boot; stored NetworkManager settings reconnect |
-
-Find `opi-3w-wbuild-XXXXXXXX` in the router, or read the IP in BOOT-STATUS.TXT:
+Find `opi-3w-wbuild-XXXXXXXX` in the router or read the IP address in `BOOT-STATUS.TXT`, then connect:
 
 ```bash
 ssh root@DEVICE_IP
 ```
 
-If no address appears, power off, read the card in Windows and attach
-BOOT-STATUS.TXT. Do not attach CONFIG.TXT. BUILD-ONLY does not identify the exact
-failure: kernel, initramfs, systemd or FAT mount failures can all prevent the
-status service from writing.
+After successful setup, the plaintext `PSK` and `ROOT_PASSWORD` entries in `CONFIG.TXT` are blanked. NetworkManager retains the derived WPA key in a private profile. This scrubbing is not secure erasure of flash storage. Do not publish a filled-in `CONFIG.TXT`.
 
-Successful setup blanks PSK and ROOT_PASSWORD in CONFIG.TXT. NetworkManager keeps
-the derived WPA key in a mode-0600 profile. Interrupted scrubbing finishes on the
-next run. Status reports exclude passwords and SSIDs; they include boot ID, times
-and local IPv4. Config scrubbing is not secure erasure of flash media.
+## Partition layout and expansion
 
-## Verify on the board
+For the supported donor profile:
+
+| Physical location | Use | Partition number |
+| --- | --- | --- |
+| 0–32 MiB | Preserved reserved boot area, including boot0 and boot package | Outside partitions |
+| 32–96 MiB | 64 MiB FAT32 configuration partition, mounted at `/config` | 2 |
+| 96 MiB onward | ext4 root filesystem | 1 |
+
+Root remains partition 1 because the vendor boot script references that partition. It is physically last so it can grow without moving its starting sector. The original root UUID and disk ID are preserved.
+
+On boot, `opi-3w-wbuild-expand` updates the MBR root size, asks `partx` to refresh the kernel's partition geometry, checks the reported size, and runs `resize2fs`. Expansion preserves the root start and UUID. Failures are recorded and retried on a later boot while WiFi/SSH provisioning can continue.
+
+On the tested card, the root partition expanded to the remaining card capacity and `df -h` reported a **235G root filesystem**. This is not limited to the initial 2 GiB image size.
+
+## The boot failure and the working fix
+
+### What failed
+
+A freshly generated image stopped at the Orange Pi bootloader splash screen. `BOOT-STATUS.TXT` remained at `BUILD-ONLY`. That marker alone could not distinguish a bootloader failure from a kernel, initramfs, systemd or configuration-mount failure.
+
+The investigation compared a working stock image, a working pre-rename 0.5.0 build, and the failing 0.7.0 build. Their reserved boot bytes, kernel bytes, initramfs and selected DTB matched. The root UUID, systemd executable and dynamic loader also matched between the working and failing builds.
+
+The useful difference was the **on-disk representation of the boot files**:
+
+| Kernel storage | Working 0.5.0 | Failing 0.7.0 |
+| --- | --- | --- |
+| Logical 4 KiB data blocks | 6484 | 6484 |
+| Logical data blocks with allocation | 6484 | 6137 |
+| Sparse holes | 0 | **347** |
+| Extent layout | Two extents | Many extents plus an extent-tree block |
+| File contents/hash | Identical | Identical |
+
+The fresh filesystem was populated using `mkfs.ext4 -d`. The resulting kernel represented some zero-filled regions as holes. A normal file hash returns the same bytes for a hole as for allocated zero-filled blocks, so the original hash checks did not distinguish these layouts.
+
+A host check using the vendor-branch U-Boot ext4 reader successfully read the failing files. That was useful evidence, but it was not a complete emulation of the firmware running on the board.
+
+### What the builder now does
+
+After creating and populating `root.ext4`, [`scripts/boot_allocation.py`](scripts/boot_allocation.py):
+
+1. Mounts only the newly created filesystem through a temporary loop device.
+2. Verifies the expected boot file hashes and symlink targets.
+3. Preallocates replacement regular boot files and writes every byte, including zero-filled regions.
+4. Checks that the files have no sparse holes.
+5. Preserves boot contents, symlinks, ownership, permissions and hardlinks within `/boot`.
+6. Verifies the boot files again, unmounts, and lets assembly run a filesystem check.
+
+An allocation audit is saved inside the image at `/usr/share/opi-3w-wbuild/boot-allocation.json`. A more detailed audit, including before/after kernel inode mappings, is retained beside `root.ext4` in the Linux workspace.
+
+The tested diagnostic image's kernel became **one continuous extent** without changing its bytes. That image booted, connected to WiFi and SSH, expanded root to the card capacity, and passed numerical OpenCL and Vulkan tests.
+
+**The proven remedy is the mounted-filesystem normalization procedure.** The exact low-level trigger is not fully isolated: it changes allocation and also initializes filesystem journal state. A mount-only control image was prepared, but its board result has not been reported. Do not treat this as proof that every U-Boot version fails on sparse files, or that sparse allocation alone was conclusively responsible.
+
+The booted diagnostic retained root at 96 MiB. Returning root to 32 MiB had not fixed the earlier failure, so partition relocation alone did not explain it.
+
+Sparse storage of the **outer host `.img` file** is a separate issue. This workaround targets file allocation **inside the ext4 `/boot` directory**.
+
+## Included tools and functions
+
+| File or command | Function |
+| --- | --- |
+| `BUILD.bat`, `EXTRACT.bat`, `Build.ps1` | Windows launchers, distribution/input selection and initial image size |
+| `windows-entry.sh` | Separate WSL workspace, input staging, logging, build invocation and compressed export |
+| `setup-wsl.sh`, `scripts/enable-arm64.py` | Host dependencies and ARM64 binary-format registration |
+| `extract-hardware.sh`, `scripts/hardware_bundle.py` | Read-only donor extraction; allowlisted bundle creation, safe unpacking and hash validation |
+| `build.sh` | Fresh Debian bootstrap, package setup, hardware/runtime installation and image assembly |
+| `scripts/assemble_image.py` | Explicit ext4 profile, compact image layout and preserved raw boot data |
+| `scripts/boot_allocation.py` | Dense boot-file allocation and preservation checks |
+| `scripts/donor_files.py` | Resolve hardware files and symlinks inside the donor root |
+| `scripts/board_profile.py`, `scripts/boot_manifest.py` | Selected DTB profile and complete boot-file hash/symlink snapshots |
+| `gpu/install.sh`, `scripts/powervr.py` | Pinned userspace extraction, matched GPU module installation/build and runtime manifest |
+| `gpu/prepare-headers.py`, `scripts/stage_kbuild.py` | ARM64 header helper preparation and GPU Kbuild source-link staging |
+| `overlay/firstboot.py` | Credentials, identity, SSH, WiFi, configuration scrubbing and boot milestones |
+| `overlay/expand.py` | Guarded partition growth, kernel refresh, ext4 resize and read-only size checks |
+| `opi-3w-wbuild-status` | Runtime status, relevant service state and recent setup logs |
+| `opi-3w-wbuild-verify` | Board, OS, boot, storage, networking, service, integrity and actual GPU computation checks |
+| `opi-3w-wbuild-gpu-test` | Standalone numerical OpenCL and Vulkan checks |
+| `opi-3w-wbuild-gpu-run COMMAND` | Run a command with the isolated PowerVR library/ICD environment |
+
+The image enables `opi-3w-wbuild-boot-status.service`, `opi-3w-wbuild-expand.service` and `opi-3w-wbuild-firstboot.service`, alongside the required networking and SSH services.
+
+The PowerVR module is kept out of automatic early loading. Explicit GPU commands load it after boot. Debian provides the API loaders; matched vendor libraries and firmware provide the device runtime. No GPU clock/voltage overlay or feature-faking Vulkan layer is enabled.
+
+## Verify the running board
+
+Run these as root. The minimal image does not install `sudo`:
 
 ```bash
 opi-3w-wbuild-status
+opi-3w-wbuild-expand --check
 opi-3w-wbuild-verify
 ```
 
-Verification requires Debian 13 ARM64, the matched kernel, preserved root UUID,
-unchanged boot tree, matching runtime/hardware hashes, configured networking and
-services, and real numerical OpenCL/Vulkan tests. Reports and command logs are
-saved under /var/log/opi-3w-wbuild in a dated tar.gz bundle. Attach that bundle when
-reviewing results.
+Standalone GPU checks are also available:
 
-The vendor Zero 3W DTS incorrectly contains model `sun60iw2` and compatible
-`xunlong,orangepi-4-pro`, `arm,sun60iw2p1`. The verifier does not accept that label
-alone. It requires the explicitly selected Zero 3W DTB, its recorded file hash,
-and matching live model/compatible data. The known label is then reported as a
-warning, with the boot-tree integrity check still required. It does not rewrite
-the DTB or claim that this generic label independently identifies the hardware.
+```bash
+opi-3w-wbuild-gpu-test
+opi-3w-wbuild-gpu-run clinfo
+```
 
-The PowerVR DDK remains 24.2.6603887 / BVNC 36.56.104.183. The WSI helper and its
-native dependencies are included. Kernel module source, header preparation, source
-staging, OPP diagnostic guard and DDK metadata checks remain as in the working
-baseline. The new module is not configured to load automatically; explicit GPU
-commands load it after boot. The build also tests loading the WSI helper under
-emulation, which checks dependencies but not GPU operation.
+The verifier checks the selected DTB and live metadata, Debian/kernel identity, boot tree, configured services, failed units, network address, mounts, root UUID, actual expansion sizes, runtime/hardware hashes, loaded DDK version, and numerical OpenCL/Vulkan results. It also reports clock synchronization and identity/key observations.
 
-A GPU enumeration result or FP16 extension advertisement does not establish a
-numerical workload. The supplied tests verify actual OpenCL and Vulkan results.
-No new VPU stack, graphics feature-faking layer, or GPU clock/voltage overlay is
-enabled. NPU inference remains NOT TESTED. Bluetooth, microphone and other board
-peripherals require their own tests; retaining firmware is not proof of operation.
+The vendor Zero 3W DTS carries the misleading `xunlong,orangepi-4-pro` compatibility label. The verifier permits the known label only when the explicitly selected Zero 3W DTB, its recorded hash and live metadata agree. It does not identify the board from that label alone.
 
-## Host validation
+Reports are saved under `/var/log/opi-3w-wbuild/` as dated `.tar.gz` bundles.
+
+### Validation status
+
+The pre-rename 0.7.0 diagnostic image with dense boot files passed board verification on November 6, 2026:
+
+- Boot, Debian 13 and vendor kernel `6.6.98-sun60iw2`.
+- WiFi DHCP, SSH and no failed systemd units.
+- Full-card root expansion on a 500170752-sector card.
+- Boot, module, firmware and runtime integrity checks.
+- PowerVR DDK identity.
+- OpenCL kernel execution and Vulkan compute shader execution with verified numerical results.
+
+The 0.7.2 builder includes that normalization procedure and the project rename. Its **84 host tests passed**, with two GPU SDK-dependent test groups skipped. The exact fresh 0.7.2 output still needs its own complete WSL build and board test.
+
+NPU inference, microphone capture, Bluetooth operation, VPU acceleration, desktop composition and sustained AI workloads are not validated by these tests. GPU compute success does not establish NPU support or application compatibility.
+
+## Logs and troubleshooting
+
+| Evidence | Location or meaning |
+| --- | --- |
+| Build/setup failure | `out/build.log`; Linux workspace paths appear in that log |
+| Card has `BUILD-ONLY` | The Linux status service has not updated the configuration partition; the exact failed stage is unknown |
+| `LINUX_STARTED` | Linux reached the early status service and mounted `/config` |
+| `SSH_READY` | Credential and SSH setup reached its checkpoint |
+| `WAITING_FOR_WIFI_DEVICE` / `WAITING_FOR_DHCP` | WiFi discovery or address acquisition is pending |
+| `CONFIGURED` | First-boot networking completed; the IP is recorded |
+| `ROOT_EXPAND_DEFERRED` | Expansion failed its checks or resize and will retry later |
+| Runtime setup state | `/var/lib/opi-3w-wbuild/` |
+| Runtime verification reports | `/var/log/opi-3w-wbuild/` |
+
+If networking is unavailable, power off and read `BOOT-STATUS.TXT` from the card in Windows. Share that status file or a verification report, not a populated `CONFIG.TXT` or a NetworkManager connection profile.
+
+Keep a known working image while testing changes. The boot allocation audit is particularly useful when a new image has correct file hashes but does not boot.
+
+## Host checks
 
 ```bash
 python3 -m unittest discover -s tests -v
 bash -n build.sh extract-hardware.sh setup-wsl.sh windows-entry.sh gpu/install.sh
 ```
 
-Boot allocation tests cover real sparse files, hardlinks and metadata preservation.
-Host assembly tests substitute loop mounting; WSL uses the real mounted filesystem.
-Native archive/assembly tests need rsync, device-tree-compiler, e2fsprogs and
-dosfstools. They create real filesystems and synthetic boot payloads, verify
-boot preservation, exclude vendor OS files and reject unsafe archives. Expansion
-tests cover partition guards, kernel refresh failure, retry and real ext4 growth.
-GPU SDK-dependent host tests skip when their development packages are absent.
+Native filesystem tests need e2fsprogs, dosfstools, rsync and device-tree-compiler. Allocation tests cover real sparse files, hardlinks and metadata preservation. Assembly tests create real filesystems and images, but substitute loop mounts where the host test executor cannot mount. Host checks do not establish board boot or GPU execution.
+
+## Credits and references
+
+Development and hardware testing: [mkinderwater](https://github.com/mkinderwater).
+
+This project benefited from the following upstream work and public references:
+
+| Project or contributor | Contribution to this work |
+| --- | --- |
+| [Orange Pi / Xunlong](https://github.com/orangepi-xunlong) | Original board image, boot path, device trees, kernel/module source, firmware and the official repository containing the matched PowerVR userspace package |
+| [Allwinner](https://www.allwinnertech.com/) and [Imagination Technologies](https://www.imaginationtech.com/) | A733 BSP and PowerVR software underlying the retained hardware stack |
+| [Debian](https://www.debian.org/) | Fresh userspace, `debootstrap`, packages, API loaders and system services |
+| [U-Boot](https://www.u-boot.org/), including [Orange Pi's A733 branch](https://github.com/orangepi-xunlong/u-boot-orangepi/tree/v2018.05-sun60iw2) | Retained bootloader and the source used for the separate host ext4-reader investigation |
+| [e2fsprogs](https://git.kernel.org/pub/scm/fs/ext2/e2fsprogs.git/) | ext4 creation, inspection, consistency checks and resizing used in the build and diagnosis |
+| [Incipiens / OrangePiZero3W-GPU-VPU](https://github.com/Incipiens/OrangePiZero3W-GPU-VPU) | Reference for A733 GPU/VPU image workflows and matching vendor hardware assets; this builder does not include that project's VPU stack |
+| [wuclark / zero3w-pvr-forge](https://github.com/wuclark/zero3w-pvr-forge) | Reference for the matched Zero 3W PowerVR DDK/BVNC stack, runtime separation, validation and module startup considerations |
+| [davidhfrankelcodes / pvr-a733-armbian](https://github.com/davidhfrankelcodes/pvr-a733-armbian) | Reference for A733 PowerVR bring-up, real workload testing and documented limitations; its feature-strip layer and clock overlay are not enabled here |
+| [mkinderwater / bpi-zero-wbuild](https://github.com/mkinderwater/bpi-zero-wbuild) | The earlier working builder used as the reference for root partition growth, `partx` refresh, `resize2fs`, and nonfatal retry behavior |
+
+The community repositories above were consulted during development. Their inclusion is acknowledgment of useful published work, not a claim of direct collaboration or endorsement. Their installer scripts are not run by this builder. The boot-allocation investigation and workaround described here were developed and tested in this project.
+
+Useful upstream source links:
+
+- [Pinned Orange Pi kernel source](https://github.com/orangepi-xunlong/linux-orangepi/tree/2ac08e8c7cdc28abbdc5c9a9dd812f887ae9c79f).
+- [Pinned official rootfs/package repository revision](https://github.com/orangepi-xunlong/rk-rootfs-build/tree/7b6d78d4f5eaefd5456777fbea5057a0876e8f4d).
+- [PowerVR runtime and build notes](gpu/README.md).
+
+## Publishing and third-party assets
+
+Publish the builder source, tests and configuration template. Keep generated images, hardware bundles, header packages, build outputs and credentials out of the source repository. Retain `inputs/README.md` so users know where to place their own inputs.
+
+The builder does not ship a donor image or proprietary PowerVR binaries in its source archive. It downloads/extracts the pinned runtime at build time and uses hardware assets from the donor supplied locally. Upstream software, firmware, module sources and vendor binaries retain their own licenses and redistribution terms; credit does not replace those terms.

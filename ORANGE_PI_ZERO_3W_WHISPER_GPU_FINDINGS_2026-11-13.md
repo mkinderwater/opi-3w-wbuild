@@ -1,6 +1,5 @@
 # Whisper GPU offload on the Orange Pi Zero 3W: failures, workarounds and measured results
 
-**Author:** Matthew Kinderwater, iCube Development (Calgary) Ltd.  
 **Report date:** 2026-11-13 UTC  
 **Evidence through:** `results-20261113T130435Z-YGoQvJ.tar.gz`  
 **Latest board-tested matrix suite:** `opi-ggml-vulkan-test-0.6.0.zip`  

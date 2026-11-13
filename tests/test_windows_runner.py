@@ -47,7 +47,7 @@ class WindowsRunnerTests(unittest.TestCase):
                 self.assertIn('MOCK-EXTRACT',log)
                 self.assertEqual((project/'inputs/zero3w-hardware.tar.gz').read_bytes(),b'bundle')
             self.assertFalse(list(home.glob('opi-3w-wbuild/*/donor.img')))
-            name='opi-3w-wbuild-0.7.5.img.gz'
+            name='opi-3w-wbuild-0.7.6.img.gz'
             image=destination/name
             if fail:
                 self.assertIn('MOCK-BUILD-FAILED',log)

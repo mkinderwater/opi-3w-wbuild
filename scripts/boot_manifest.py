@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record and compare every vendor /boot file and symlink without rewriting it."""
+"""Record and compare every /boot file and symlink without rewriting it."""
 import argparse
 import hashlib
 import json
@@ -34,7 +34,7 @@ def verify(root, expected):
     actual = snapshot(root)
     if actual != expected:
         changed = sorted(k for k in set(actual)|set(expected) if actual.get(k)!=expected.get(k))
-        raise ValueError('Vendor /boot changed: '+', '.join(changed))
+        raise ValueError('Boot manifest changed: '+', '.join(changed))
 
 
 if __name__ == '__main__':

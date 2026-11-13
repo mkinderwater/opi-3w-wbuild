@@ -1,20 +1,10 @@
 # opi-3w-wbuild
 
-**Version 0.7.5**
-
 Build a compact **Debian 13 ARM64** microSD image for the **Orange Pi Zero 3W, Allwinner A733**, from Windows using WSL2.
 
-The builder extracts the working hardware stack from an original Orange Pi image, builds fresh Debian userspace, adds matched PowerVR and VIPLite compute runtimes, and produces a compressed image ready to flash. A reusable hardware bundle removes the need to keep copying a complete vendor image into each build.
+The builder extracts the working hardware stack from an original Orange Pi image, builds fresh Debian userspace, adds a matched PowerVR compute runtime, and produces a compressed image ready to flash. A reusable hardware bundle removes the need to keep copying a complete vendor image into each build.
 
 The project was developed and tested on the **1 GB Orange Pi Zero 3W**. It is intended as a small, reusable starting point for appliances and other projects.
-
-## Verified on hardware
-
-On the tested 1 GB board, the working image has booted with WiFi, SSH, full-card root expansion, and numerical **OpenCL, Vulkan and NPU inference** checks passing.
-
-NPU validation passed on **November 6, 2026**, using the 0.7.5 probe installed on the existing working card: two LeNet inputs, six alternating hardware inferences, positive hardware cycle counts, and comparison against independently calculated CPU references. Maximum absolute error was **0.004971444606781006**, below the **0.03** tolerance.
-
-The boot/expansion/GPU checkpoint was the pre-rename diagnostic image. The NPU result was obtained by updating that card in place. A complete fresh 0.7.5 image has not yet had its own reported end-to-end board test.
 
 ## What it provides
 
@@ -25,7 +15,8 @@ The boot/expansion/GPU checkpoint was the pre-rename diagnostic image. The NPU r
 - First-boot machine identity, SSH host keys and NetworkManager WiFi provisioning.
 - Automatic root partition and ext4 expansion to the card's remaining capacity.
 - An isolated PowerVR runtime with actual numerical OpenCL and Vulkan tests.
-- An A733 VIPLite runtime with a hardware-verified LeNet inference/reference test.
+- GPU clock fixed at **1008 MHz**, with its supply fixed at **960 mV**, from the donor GPU operating-point table.
+- A candidate A733 VIPLite runtime with a small LeNet NPU inference/reference test.
 - Boot milestones, integrity checks and saved verification reports.
 - A boot-file allocation workaround developed while diagnosing an image that stopped at the vendor bootloader splash screen.
 
@@ -42,20 +33,17 @@ The boot/expansion/GPU checkpoint was the pre-rename diagnostic image. The NPU r
 | GPU | Imagination PowerVR B-Series BXM-4-64 |
 | PowerVR DDK | `24.2.6603887` |
 | BVNC | `36.56.104.183` |
-| NPU API | VIPLite 2.0; tested userspace reports `2.0.3.2-AW-2024-08-30` |
-| NPU hardware ID | `0x1000003b`, one device |
-| NPU sample | A733/v3 LeNet NBG; uint8 input, FP16 output |
 | Main build environment | Windows with Debian under WSL2 |
 | Initial image size | 2048 MiB; configurable through the PowerShell launcher |
 
 This is a narrow, matched hardware stack. Other kernels, donor layouts, boards and RAM variants have not been established as compatible. This is the A733 **Zero 3W**, not the H618 Zero 3, Zero 2W, or a Radxa Zero board.
 
-Exact PowerVR package URLs, checksums and the kernel source commit are recorded in [`gpu/pins.json`](gpu/pins.json). The current kernel source pin is `2ac08e8c7cdc28abbdc5c9a9dd812f887ae9c79f` from Orange Pi's kernel repository. NPU source paths, sizes and hashes are recorded in [`npu/pins.json`](npu/pins.json), pinned to SDK commit `fc90006d0f6569da2f6726c2d8395877686f5aca`.
+Exact PowerVR package URLs, checksums and the kernel source commit are recorded in [`gpu/pins.json`](gpu/pins.json). The current kernel source pin is `2ac08e8c7cdc28abbdc5c9a9dd812f887ae9c79f` from Orange Pi's kernel repository.
 
 ## Requirements
 
 - WSL2 with a Debian distribution and a working Linux user account with `sudo` access.
-- Internet access for Debian packages, pinned source, the PowerVR package and pinned NPU SDK assets.
+- Internet access for Debian packages, pinned source and the PowerVR package.
 - Space in the WSL Linux filesystem for the build tree, temporary compiler/source files and output images. The 2 GiB output size is not the total workspace requirement.
 - An original, uncompressed vendor `.img` that already boots on the target board.
 - A microSD card and an imaging application. Armbian Imager was used during development.
@@ -122,15 +110,15 @@ BUILD.bat
 
 `BUILD.bat` also performs extraction automatically if only `inputs/vendor.img` is present. When the hardware bundle exists, it takes precedence over the donor image.
 
-For version 0.7.5, the output is:
+For version 0.7.6, the output is:
 
 ```text
-out/opi-3w-wbuild-0.7.5.img.gz
-out/opi-3w-wbuild-0.7.5.img.gz.sha256
+out/opi-3w-wbuild-0.7.6.img.gz
+out/opi-3w-wbuild-0.7.6.img.gz.sha256
 out/build.log
 ```
 
-Build workspaces are retained under `~/opi-3w-wbuild/build-0.7.5-*` inside the selected WSL distribution. Filesystem assembly workspaces are retained under `/var/tmp/opi-3w-wbuild.*`. These paths are printed in the log.
+Build workspaces are retained under `~/opi-3w-wbuild/build-0.7.6-*` inside the selected WSL distribution. Filesystem assembly workspaces are retained under `/var/tmp/opi-3w-wbuild.*`. These paths are printed in the log.
 
 The launcher installs host dependencies and registers ARM64 execution support. It builds inside the Linux filesystem, then exports the compressed output to the Windows project folder.
 
@@ -267,6 +255,7 @@ Sparse storage of the **outer host `.img` file** is a separate issue. This worka
 | `build.sh` | Fresh Debian bootstrap, package setup, hardware/runtime installation and image assembly |
 | `scripts/assemble_image.py` | Explicit ext4 profile, compact image layout and preserved raw boot data |
 | `scripts/boot_allocation.py` | Dense boot-file allocation and preservation checks |
+| `scripts/gpu_opp.py` | Default GPU 1008 MHz / 960 mV configuration, exact DTB change audit and original/configured boot manifests |
 | `scripts/donor_files.py` | Resolve hardware files and symlinks inside the donor root |
 | `scripts/board_profile.py`, `scripts/boot_manifest.py` | Selected DTB profile and complete boot-file hash/symlink snapshots |
 | `gpu/install.sh`, `scripts/powervr.py` | Pinned userspace extraction, matched GPU module installation/build and runtime manifest |
@@ -274,88 +263,64 @@ Sparse storage of the **outer host `.img` file** is a separate issue. This worka
 | `overlay/firstboot.py` | Credentials, identity, SSH, WiFi, configuration scrubbing and boot milestones |
 | `overlay/expand.py` | Guarded partition growth, kernel refresh, ext4 resize and read-only size checks |
 | `opi-3w-wbuild-status` | Runtime status, relevant service state and recent setup logs |
-| `opi-3w-wbuild-verify` | Board, OS, boot, storage, networking, service, integrity, GPU computation and installed NPU runtime checks |
+| `opi-3w-wbuild-verify` | Board, OS, boot, storage, networking, service, integrity and actual GPU computation checks |
 | `opi-3w-wbuild-gpu-test` | Standalone numerical OpenCL and Vulkan checks |
-| `npu/install.sh` | Fetch pinned NPU assets, compile the native probe and install its test command |
-| `npu/update.sh` | Recompile an installed probe using retained SDK assets, with a saved previous runtime |
-| `npu/probe.c`, `npu/test.py` | Direct VIPLite execution, tensor decoding, profiling, reference checks and JSON reports |
-| `npu/reference.py`, `npu/golden.json` | Optional host reference reproducer and committed independent reference vectors |
 | `opi-3w-wbuild-npu-test` | Direct VIPLite LeNet inference, hardware profiling and independent reference comparison |
 | `opi-3w-wbuild-gpu-run COMMAND` | Run a command with the isolated PowerVR library/ICD environment |
 
 The image enables `opi-3w-wbuild-boot-status.service`, `opi-3w-wbuild-expand.service` and `opi-3w-wbuild-firstboot.service`, alongside the required networking and SSH services.
 
-The PowerVR module is kept out of automatic early loading. Explicit GPU commands load it after boot. Debian provides the API loaders; matched vendor libraries and firmware provide the device runtime. No GPU clock/voltage overlay or feature-faking Vulkan layer is enabled.
+The PowerVR module is kept out of automatic early loading. Explicit GPU commands load it after boot. Debian provides the API loaders; matched vendor libraries and firmware provide the device runtime. The selected DTB sets the GPU to 1008 MHz and its dcdc4 supply to 960 mV. No overlay installation is required. No feature-faking Vulkan layer is enabled.
 
-## NPU inference
+## GPU clock and voltage finding, incorporated in 0.7.6
 
-The NPU is a separate accelerator from the PowerVR GPU. This build uses the preserved vendor kernel driver with a pinned VIPLite `v2.0` runtime pair and an A733 **v3** LeNet NBG model. It does not rebuild the NPU driver or change the base device tree to run this test.
+The running image selected 600 MHz and 800 mV because the driver did not find
+its plain `clk_rate` property. Its live GPU table already declared a
+1008 MHz / 960 mV default point. The builder now applies that pair to the
+selected DTB during every build. This is the image default.
 
-New images include the runtime. Run as root:
+The original hardware bundle stays unchanged. The builder changes only
+`clk_rate` on the GPU and the min/max microvolt constraints on its dcdc4
+supply. It verifies the supply phandle, declared operating point and regulator
+limits first, then compares every DT property, node and memory reservation.
+CPU, NPU, microphone, kernel and boot-script settings remain intact.
+
+Original donor boot hashes remain in `vendor-boot.json`; final image hashes
+are in `configured-boot.json`. The original DTB, changed properties and both
+DTB hashes are saved alongside them under `/usr/share/opi-3w-wbuild/`.
+Assembly and dense-allocation checks use the audited final manifest. The
+verifier checks the final DTB/profile and live operating-point settings.
+
+The exact fresh 0.7.6 image still requires a complete WSL build and board boot.
+This setting does not claim to fix the independently reproduced FP16 RTE
+arithmetic failure or establish a Whisper performance gain. Full findings and
+local checks are in [gpu/GPU_CLOCK_VOLTAGE_FINDINGS.md](gpu/GPU_CLOCK_VOLTAGE_FINDINGS.md).
+
+## NPU bring-up
+
+Version 0.7.6 includes a pinned VIPLite 2.0 runtime and A733/v3 LeNet model.
+The NPU probe prepares the network before attaching input/output buffers,
+as required by VIPLite, and decodes the model's FP16 output tensors. An existing runtime can be updated with
+`bash npu/update.sh` on the board; see [npu/README.md](npu/README.md).
+The explicit test alternates two inputs for six inferences, checks hardware identity
+and positive inference cycle counts, and compares the output probabilities with
+independently reproduced CPU references. It has no CPU inference fallback.
+
+On a new image:
 
 ```bash
 opi-3w-wbuild-npu-test
 ```
 
-The test:
+For the already working card, copy the repository's `npu` folder to `/root/npu`,
+then run `bash /root/npu/install.sh` and `opi-3w-wbuild-npu-test`. No reflash is
+needed. Installation downloads only the pinned runtime/model/header assets,
+compiles the probe, and does not initialize the NPU during installation.
 
-1. Checks installed file hashes, kernel ABI, device availability and NPU hardware identity.
-2. Loads the compiled LeNet model through VIPLite.
-3. Alternates the SDK digit-zero input and a generated digit-seven input for six hardware inferences.
-4. Requires positive hardware cycle counts from VIPLite profiling.
-5. Decodes the output tensor and compares all ten probabilities from every inference against independent CPU references, including the expected top class.
-6. Rejects API errors, missing profiling, stale outputs, nonfinite values, timeouts and numerical mismatches.
-
-There is **no CPU inference fallback**. Reference vectors were calculated offline with OpenCV 4.10.0's CPU Caffe backend and a separate NumPy implementation of the LeNet layers. Those two implementations agreed within approximately `1.2e-7`. The on-board test reads the committed reference vectors; it does not require OpenCV or NumPy.
-
-### Verified result
-
-The corrected 0.7.5 probe passed on the existing working board:
-
-```text
-NPU inference: PASS
-Two LeNet inputs; six alternating hardware inferences; independent CPU reference comparison.
-{"inferences": 6, "cases": 2, "max_absolute_error": 0.004971444606781006, "absolute_tolerance": 0.03}
-```
-
-This establishes execution and numerical agreement for this small model. Larger models, sustained throughput, memory use, operator coverage and application compatibility need their own tests. It does not establish general LLM or speech-model support.
-
-### The two probe fixes
-
-These were errors in this project's test program:
-
-- **API order, fixed in 0.7.4:** `vip_prepare_network` must run before `vip_set_input` and `vip_set_output`. Attaching input first returned status `-9`. The SDK header documents this requirement and its `awnn` example follows it.
-- **FP16 decoding, fixed in 0.7.5:** the model reports output format `1` (FP16), quantization `0`. The earlier probe supported FP32 and integer output formats and could not decode this output. The new decoder handles IEEE 754 binary16; host tests compare all 65,536 encodings against Python's independent half-precision decoder. Nonfinite inference outputs still fail validation.
-
-Tensor metadata and formerly silent failure paths now produce diagnostics. Neither fix required a new kernel, device tree, model or image reflash.
-
-### Install or update an existing card
-
-Copy the repository's `npu` directory to `/root/npu` on the board. If the runtime is absent:
-
-```bash
-bash /root/npu/install.sh
-opi-3w-wbuild-npu-test
-```
-
-If `/opt/opi-3w-wbuild-npu` already exists, use the updater instead:
-
-```bash
-bash /root/npu/update.sh
-opi-3w-wbuild-npu-test
-```
-
-Installation downloads pinned libraries, headers and sample assets, compiles the probe, and removes compiler packages introduced for that installation. The updater checks the existing runtime's hashes, uses its retained libraries and headers, recompiles the probe, and retains the previous runtime under the printed `/var/tmp/opi-npu-update.*` path. Run updates without another NPU test in progress.
-
-Reports are written to `/var/log/opi-3w-wbuild/npu-*.json`. For machine-readable output:
-
-```bash
-opi-3w-wbuild-npu-test --json
-```
-
-No NPU inference runs automatically at boot. The full verifier runs this test when its runtime is installed and the preceding required checks pass. On older cards, the old `foundation-verify` command remains unchanged by a standalone NPU update; use `opi-3w-wbuild-npu-test` for the new NPU evidence.
-
-See [NPU setup and references](npu/README.md) for asset preparation and reference reproduction details. The current board result and its limits are recorded above.
+**NPU board validation remains pending.** A PASS must come from the actual board;
+SDK discovery and host tests are not hardware execution. Full verification runs
+the NPU test when its runtime is installed, and records a failure rather than
+claiming NPU support when that test fails. See [NPU setup, validation and credits](npu/README.md).
 
 ## Verify the running board
 
@@ -374,11 +339,11 @@ opi-3w-wbuild-gpu-test
 opi-3w-wbuild-gpu-run clinfo
 ```
 
-The verifier checks the selected DTB and live metadata, Debian/kernel identity, boot tree, configured services, failed units, network address, mounts, root UUID, actual expansion sizes, runtime/hardware hashes, loaded DDK version, numerical OpenCL/Vulkan results, and the installed NPU runtime's hardware inference result. It also reports clock synchronization and identity/key observations.
+The verifier checks the selected DTB and live metadata, Debian/kernel identity, boot tree, configured services, failed units, network address, mounts, root UUID, actual expansion sizes, runtime/hardware hashes, loaded DDK version, and numerical OpenCL/Vulkan results. It also checks the live GPU DT settings and available regulator/GPU clock readbacks; an unavailable readback is a warning, not confirmation. Clock synchronization and identity/key observations are reported separately.
 
 The vendor Zero 3W DTS carries the misleading `xunlong,orangepi-4-pro` compatibility label. The verifier permits the known label only when the explicitly selected Zero 3W DTB, its recorded hash and live metadata agree. It does not identify the board from that label alone.
 
-Verification bundles are saved under `/var/log/opi-3w-wbuild/` as dated `.tar.gz` files; standalone NPU evidence is saved there as `.json`.
+Reports are saved under `/var/log/opi-3w-wbuild/` as dated `.tar.gz` bundles.
 
 ### Validation status
 
@@ -391,11 +356,9 @@ The pre-rename 0.7.0 diagnostic image with dense boot files passed board verific
 - PowerVR DDK identity.
 - OpenCL kernel execution and Vulkan compute shader execution with verified numerical results.
 
-The 0.7.5 builder includes that normalization procedure, the project rename and the corrected NPU probe. Its latest host suite reported **98 tests: 96 passed and two SDK-dependent groups skipped**. Host coverage includes real filesystem preparation, allocation preservation, NPU API sequencing, FP16 decoding and result validation. Some filesystem tests substitute loop mounts where the test host cannot mount.
+The 0.7.6 builder includes that normalization procedure, the project rename, the default GPU 1008 MHz / 960 mV setting and the candidate NPU test. Host tests cover preparation, API sequencing and verification; SDK-dependent groups skip when their development headers are absent. The exact fresh 0.7.6 output still needs its own complete WSL build and board test.
 
-Separately, the 0.7.5 NPU runtime/probe update passed hardware inference on the existing working card, as recorded above. The exact fresh 0.7.5 image still needs its own complete WSL build and board test.
-
-Microphone capture, Bluetooth operation, VPU acceleration, desktop composition, larger NPU models and sustained AI workloads still need board validation. Each accelerator and application needs its own execution test.
+NPU inference on the newly added candidate runtime, microphone capture, Bluetooth operation, VPU acceleration, desktop composition and sustained AI workloads still need board validation. GPU compute success does not establish NPU support or application compatibility.
 
 ## Logs and troubleshooting
 
@@ -419,10 +382,10 @@ Keep a known working image while testing changes. The boot allocation audit is p
 
 ```bash
 python3 -m unittest discover -s tests -v
-bash -n build.sh extract-hardware.sh setup-wsl.sh windows-entry.sh gpu/install.sh npu/install.sh npu/update.sh
+bash -n build.sh extract-hardware.sh setup-wsl.sh windows-entry.sh gpu/install.sh
 ```
 
-Native filesystem tests need e2fsprogs, dosfstools, rsync and device-tree-compiler. Allocation tests cover real sparse files, hardlinks and metadata preservation. Assembly tests create real filesystems and images, but substitute loop mounts where the host test executor cannot mount. Host checks do not establish board boot, GPU execution or NPU inference. Native NPU probe tests additionally require the pinned SDK headers; set `NPU_SDK_HEADERS` to the directory containing `vip_lite.h` to enable that test group.
+Native filesystem tests need e2fsprogs, dosfstools, rsync and device-tree-compiler. Allocation tests cover real sparse files, hardlinks and metadata preservation. Assembly tests create real filesystems and images, but substitute loop mounts where the host test executor cannot mount. Host checks do not establish board boot or GPU execution.
 
 ## Credits and references
 
@@ -439,19 +402,10 @@ This project benefited from the following upstream work and public references:
 | [e2fsprogs](https://git.kernel.org/pub/scm/fs/ext2/e2fsprogs.git/) | ext4 creation, inspection, consistency checks and resizing used in the build and diagnosis |
 | [Incipiens / OrangePiZero3W-GPU-VPU](https://github.com/Incipiens/OrangePiZero3W-GPU-VPU) | Reference for A733 GPU/VPU image workflows and matching vendor hardware assets; this builder does not include that project's VPU stack |
 | [wuclark / zero3w-pvr-forge](https://github.com/wuclark/zero3w-pvr-forge) | Reference for the matched Zero 3W PowerVR DDK/BVNC stack, runtime separation, validation and module startup considerations |
-| [davidhfrankelcodes / pvr-a733-armbian](https://github.com/davidhfrankelcodes/pvr-a733-armbian) | Reference for A733 PowerVR bring-up, real workload testing and documented limitations; its feature-strip layer and clock overlay are not enabled here |
-| [wuclark / OrangePiZero3W-GPU-VPU-NPU](https://github.com/wuclark/OrangePiZero3W-GPU-VPU-NPU) | NPU-enabled fork of Incipiens' workflow; reference for donor NPU library and demo asset locations |
-| [ZIFENG278 / ai-sdk](https://github.com/ZIFENG278/ai-sdk) | Direct source of pinned VIPLite libraries and headers, the A733/v3 LeNet NBG, sample input and original Caffe model used for reference calculations; SDK API documentation and example established the required preparation order |
-| [petayyyy / a733_npu_driver](https://github.com/petayyyy/a733_npu_driver) | Published A733/Orange Pi NPU bring-up and LeNet conversion evidence; helped establish the A733/v3 model target and v2.0 runtime distinction |
-| [Radxa NPU documentation](https://docs.radxa.com/en/cubie/a7s/app-dev/npu-dev/cubie-vpm-run) | Public VIPLite/vpm_run documentation and A733 SDK guidance used during NPU research |
-| [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/) | Tools used to independently reproduce CPU reference outputs for the NPU test; neither is required by the installed on-board probe |
+| [davidhfrankelcodes / pvr-a733-armbian](https://github.com/davidhfrankelcodes/pvr-a733-armbian) | Reference for A733 PowerVR bring-up, real workload testing and documented limitations; its matched GPU clock/voltage finding informed the default DTB setting; its feature-strip layer is not enabled here |
 | [mkinderwater / bpi-zero-wbuild](https://github.com/mkinderwater/bpi-zero-wbuild) | The earlier working builder used as the reference for root partition growth, `partx` refresh, `resize2fs`, and nonfatal retry behavior |
 
-The community repositories above were consulted during development. Their inclusion acknowledges useful published work, without implying direct collaboration or endorsement. Their installer scripts are not run by this builder. The pinned NPU runtime, headers and sample assets are downloaded directly from the credited SDK repository; the GPU package comes from the credited official Orange Pi repository.
-
-The hardware-bundle packaging, first-boot integration, boot-allocation investigation and workaround, and independent accelerator verification harness were developed and tested in this project. The hardware drivers, vendor runtimes and sample model remain upstream work. The API-order and FP16 fixes corrected this project's probe, not the upstream driver.
-
-Thank you to the people who published their experiments, build scripts and limitations. This project would have taken much longer without those references.
+The community repositories above were consulted during development. Their inclusion is acknowledgment of useful published work, not a claim of direct collaboration or endorsement. Their installer scripts are not run by this builder. The boot-allocation investigation and workaround described here were developed and tested in this project. NPU references and SDK attribution are listed in [npu/README.md](npu/README.md).
 
 Useful upstream source links:
 
@@ -463,4 +417,4 @@ Useful upstream source links:
 
 Publish the builder source, tests and configuration template. Keep generated images, hardware bundles, header packages, build outputs and credentials out of the source repository. Retain `inputs/README.md` so users know where to place their own inputs.
 
-The builder does not ship a donor image or proprietary GPU/NPU binaries or sample model binaries in its source archive. It downloads/extracts pinned runtimes and NPU sample assets at build time and uses hardware assets from the donor supplied locally. Upstream software, firmware, module sources and vendor binaries retain their own licenses and redistribution terms; credit does not replace those terms.
+The builder does not ship a donor image or proprietary PowerVR binaries in its source archive. It downloads/extracts the pinned runtime at build time and uses hardware assets from the donor supplied locally. Upstream software, firmware, module sources and vendor binaries retain their own licenses and redistribution terms; credit does not replace those terms.

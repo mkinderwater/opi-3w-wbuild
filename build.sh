@@ -16,7 +16,7 @@ SIZE=${3:-2048}
 [[ $SIZE =~ ^[0-9]+$ && ! -e $OUTPUT && ! -L $OUTPUT && $OUTPUT != /mnt/* ]] || {
     echo 'Need a new image path inside the WSL Linux filesystem and an integer size.' >&2; exit 1;
 }
-for cmd in debootstrap rsync mkfs.ext4 losetup mount umount mountpoint mkfs.vfat mcopy mkimage fdtget chroot python3 e2fsck debugfs resize2fs; do
+for cmd in debootstrap rsync mkfs.ext4 losetup mount umount mountpoint mkfs.vfat mcopy mkimage fdtget fdtput chroot python3 e2fsck debugfs resize2fs; do
     command -v "$cmd" >/dev/null || { echo "Missing $cmd. Run setup-wsl.sh." >&2; exit 1; }
 done
 WORK=$(mktemp -d /var/tmp/opi-3w-wbuild.XXXXXXXX)
@@ -99,8 +99,10 @@ chroot "$R" systemctl enable opi-3w-wbuild-boot-status opi-3w-wbuild-expand opi-
 chroot "$R" systemctl set-default multi-user.target
 printf 'opi-3w-wbuild\n' > "$R/etc/hostname"
 printf '127.0.0.1 localhost\n::1 localhost ip6-localhost\n' > "$R/etc/hosts"
-printf 'opi-3w-wbuild 0.7.5\nFresh Debian 13 ARM64; verified vendor boot path; kernel %s\n' "$ABI" > "$R/etc/opi-3w-wbuild-release"
+printf 'opi-3w-wbuild 0.7.6\nFresh Debian 13 ARM64; verified vendor boot path; kernel %s\n' "$ABI" > "$R/etc/opi-3w-wbuild-release"
 cp "$WORK/"{donor-layout.json,layout.json,kernel-header.txt,dtb-compatible.txt,vendor-boot.json,board-profile.json} "$R/usr/share/opi-3w-wbuild/"
+python3 "$BASE/scripts/gpu_opp.py" "$R" "$WORK/vendor-boot.json" "$WORK/board-profile.json"
+install -m644 "$BASE/gpu/GPU_CLOCK_VOLTAGE_FINDINGS.md" "$R/usr/share/opi-3w-wbuild/"
 sha256sum "$DONOR" > "$R/usr/share/opi-3w-wbuild/hardware-bundle.sha256"
 chroot "$R" dpkg-query -W > "$R/usr/share/opi-3w-wbuild/packages.txt"
 chroot "$R" apt-get clean
@@ -111,7 +113,7 @@ ln -s /run/systemd/resolve/stub-resolv.conf "$R/etc/resolv.conf"
 rm -f "$R/etc/ssh/ssh_host_"* "$R/var/lib/dbus/machine-id"
 : > "$R/etc/machine-id"
 ln -s /etc/machine-id "$R/var/lib/dbus/machine-id"
-python3 "$BASE/scripts/boot_manifest.py" verify "$R" "$WORK/vendor-boot.json"
+python3 "$BASE/scripts/boot_manifest.py" verify "$R" "$R/usr/share/opi-3w-wbuild/configured-boot.json"
 (cd "$R"; for path in boot lib/modules usr/lib/firmware vendor/etc/firmware etc/firmware etc/modules-load.d etc/modprobe.d etc/modules; do
     if [[ -e $path ]]; then find "$path" -type f -exec sha256sum '{}' +; fi
 done) > "$R/usr/share/opi-3w-wbuild/hardware.sha256"
@@ -122,7 +124,7 @@ mkfs.vfat -F 32 -n OPICONFIG "$WORK/config.fat"
 mcopy -i "$WORK/config.fat" "$BASE/config/CONFIG.TXT.template" ::CONFIG.TXT
 printf 'BUILD-ONLY: Linux has not reported a boot yet.\n' > "$WORK/BOOT-STATUS.TXT"
 mcopy -i "$WORK/config.fat" "$WORK/BOOT-STATUS.TXT" ::BOOT-STATUS.TXT
-python3 "$BASE/scripts/assemble_image.py" build "$WORK/hardware" "$R" "$WORK/config.fat" "$WORK/root.ext4" "$OUTPUT" "$WORK/layout.json"
+python3 "$BASE/scripts/assemble_image.py" build "$WORK/hardware" "$R" "$WORK/config.fat" "$WORK/root.ext4" "$OUTPUT" "$WORK/layout.json" --configured-gpu-opp
 sha256sum "$OUTPUT" > "$OUTPUT.sha256"
 COMPLETE=true
 echo "Built $OUTPUT from fresh Debian and extracted hardware assets."

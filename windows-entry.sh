@@ -8,7 +8,7 @@ DEFAULT_INPUT=$SOURCE/inputs/zero3w-hardware.tar.gz
 DONOR=${1:-$DEFAULT_INPUT}
 SIZE=${2:-2048}
 EXTRACT_ONLY=${3:-0}
-NAME=opi-3w-wbuild-0.7.5.img.gz
+NAME=opi-3w-wbuild-0.7.6.img.gz
 [[ $# -le 3 && $SIZE =~ ^[0-9]+$ ]] || { echo 'Usage: windows-entry.sh [donor.img] [size-MiB]' >&2; exit 2; }
 [[ -f $DONOR && ! -b $DONOR ]] || { echo 'Put your uncompressed, working A733 Zero 3W 1 GB SD image at inputs/vendor.img.' >&2; exit 1; }
 [[ $EXTRACT_ONLY == 1 ]] || [[ ! -e $SOURCE/out/$NAME && ! -L $SOURCE/out/$NAME && ! -e $SOURCE/out/$NAME.sha256 && ! -L $SOURCE/out/$NAME.sha256 ]] || {
@@ -19,7 +19,7 @@ if ! grep -Eqi 'microsoft-standard|WSL2' /proc/sys/kernel/osrelease; then
 fi
 [[ $HOME != /mnt/* ]] || { echo 'WSL home must be inside the Linux filesystem.' >&2; exit 1; }
 mkdir -p "$HOME/opi-3w-wbuild" "$SOURCE/out"
-DEST=$(mktemp -d "$HOME/opi-3w-wbuild/build-0.7.5-XXXXXXXX")
+DEST=$(mktemp -d "$HOME/opi-3w-wbuild/build-0.7.6-XXXXXXXX")
 # Log setup, inspection, build and export. Keep the log even after a failed build.
 exec > >(tee "$DEST/build.log") 2>&1
 finish() {

@@ -5,6 +5,7 @@ from pathlib import Path
 from hardware_bundle import validate,filesystem
 from image_layout import inspect,sha256,MIB
 from boot_manifest import verify as verify_boot
+from gpu_opp import authorized_boot
 from boot_allocation import normalize_filesystem
 
 FEATURES='none,has_journal,ext_attr,resize_inode,dir_index,filetype,extent,flex_bg,sparse_super,large_file,huge_file,dir_nlink,extra_isize'
@@ -33,9 +34,11 @@ def verify(bundle,output,layout):
     if [(p['number'],p['type'],p['start'],p['sectors']) for p in result['partitions']]!=expected:raise ValueError('Unexpected partition geometry')
     if filesystem(output,layout['root_start'])!=layout['filesystem']:raise ValueError('Filesystem profile changed')
 
-def build(bundle,root,fat,rootfs,output,layout,normalizer=normalize_filesystem):
+def build(bundle,root,fat,rootfs,output,layout,normalizer=normalize_filesystem, configured_gpu_opp=False):
     if plan(bundle,layout['image_bytes']//MIB)!=layout:raise ValueError('Stale assembly plan')
-    m=validate(bundle);verify_boot(root,m['vendor_boot'])
+    m=validate(bundle)
+    expected_boot=authorized_boot(root,m['vendor_boot']) if configured_gpu_opp else m['vendor_boot']
+    verify_boot(root,expected_boot)
     fat=Path(fat)
     with fat.open('rb') as f:h=f.read(512)
     if fat.stat().st_size!=layout['config_bytes'] or h[82:90]!=b'FAT32   ' or h[510:]!=b'\x55\xaa' or struct.unpack_from('<I',h,32)[0]!=layout['config_bytes']//512:
@@ -45,7 +48,7 @@ def build(bundle,root,fat,rootfs,output,layout,normalizer=normalize_filesystem):
     if filesystem(rootfs,0)!=layout['filesystem']:raise ValueError('mkfs did not preserve the vendor profile')
     # mkfs -d may introduce holes in zero-filled parts of kernel/DTB files.
     # Normal file writes on the actual ext4 volume avoid that boot-reader path.
-    normalizer(rootfs,m['vendor_boot'])
+    normalizer(rootfs,expected_boot)
     if filesystem(rootfs,0)!=layout['filesystem']:raise ValueError('Boot allocation changed the filesystem profile')
     subprocess.run(['e2fsck','-fn',str(rootfs)],check=True)
     output=Path(output);fd=os.open(output,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
@@ -71,6 +74,7 @@ if __name__=='__main__':
     a=s.add_parser('plan');a.add_argument('bundle');a.add_argument('image_mib',type=int)
     a=s.add_parser('build')
     for name in ('bundle','root','fat','rootfs','output','layout'):a.add_argument(name)
+    a.add_argument('--configured-gpu-opp',action='store_true')
     a=p.parse_args()
     if a.command=='plan':print(json.dumps(plan(a.bundle,a.image_mib),indent=2))
-    else:build(a.bundle,a.root,a.fat,a.rootfs,a.output,json.loads(Path(a.layout).read_text()))
+    else:build(a.bundle,a.root,a.fat,a.rootfs,a.output,json.loads(Path(a.layout).read_text()),configured_gpu_opp=a.configured_gpu_opp)

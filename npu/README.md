@@ -110,7 +110,7 @@ It does not fetch another model or replace the kernel, drivers, or device tree.
 Do not run another NPU test or update during the update. Hardware inference
 remains unvalidated until the corrected test passes on the board.
 
-Version 0.7.5 adds IEEE 754 FP16 output decoding. The pinned model reports
+Version 0.7.6 adds IEEE 754 FP16 output decoding. The pinned model reports
 output format 1 (FP16) with quantization 0. The earlier decoder supported
 FP32 and integer outputs, so it exited when decoding this model's output.
 All 65,536 binary16 encodings are checked against Python's independent half

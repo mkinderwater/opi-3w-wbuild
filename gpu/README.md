@@ -1,7 +1,7 @@
 # PowerVR compute runtime
 
-opi-3w-wbuild 0.7.5 uses fresh Debian 13 main userspace with the working vendor boot bundle. BUILD.bat produces
-`out/opi-3w-wbuild-0.7.5.img.gz`. See the main README for configuration and
+opi-3w-wbuild 0.7.6 uses fresh Debian 13 main userspace with the working vendor boot bundle. BUILD.bat produces
+`out/opi-3w-wbuild-0.7.6.img.gz`. See the main README for configuration and
 BOOT-STATUS.TXT diagnostics.
 
 The exact package/source URLs, hashes, kernel ABI, DDK and BVNC are pinned in
@@ -14,7 +14,10 @@ Compute runtime: libPVROCL, libVK_IMG, libsrv_um, libusc, libufwriter,
 libpvr_dri_support, libglslcompiler, libpvr_mesa_wsi.so and the matching RGX firmware.
 API loaders come from Debian repositories. Additional WSI dependencies
 are installed explicitly. The isolated wrapper sets library and ICD paths for one
-command. Nothing enables a composited GPU desktop or changes GPU voltage/clocks.
+command. The image sets the GPU to 1008 MHz with its dcdc4 supply at 960 mV. The builder
+checks and audits this DTB edit; details are in
+[GPU_CLOCK_VOLTAGE_FINDINGS.md](GPU_CLOCK_VOLTAGE_FINDINGS.md).
+A composited GPU desktop is not enabled.
 
 The GPU module must match 6.6.98-sun60iw2 and DDK 24.2.6603887. When not present it
 is compiled using the matching donor header package. Kernel helpers are rebuilt

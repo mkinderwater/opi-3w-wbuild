@@ -40,12 +40,19 @@ class FakeSystem(v.System):
         header=bytearray(struct.pack('>7I4B32s',0x27051956,0,0,len(payload),0,0,zlib.crc32(payload)&0xffffffff,5,2,3,1,b'test'))
         struct.pack_into('>I',header,4,zlib.crc32(header)&0xffffffff)
         self.path('/boot/uInitrd').write_bytes(header+payload)
-        put('/usr/share/opi-3w-wbuild/vendor-boot.json',json.dumps(boot_snapshot(self.root)))
+        put('/usr/share/opi-3w-wbuild/configured-boot.json',json.dumps(boot_snapshot(self.root)))
         put('/opt/opi-3w-wbuild-powervr/lib/test.so','library bytes')
         put('/opt/opi-3w-wbuild-powervr/manifest.json',json.dumps({'kernel_abi':self.kernel,'files':{'opt/opi-3w-wbuild-powervr/lib/test.so':hashlib.sha256(b'library bytes').hexdigest()}}))
         put('/proc/meminfo','MemTotal: 900000 kB\nMemAvailable: 600000 kB\nCmaTotal: 65536 kB\nCmaFree: 60000 kB\n')
         put('/sys/class/thermal/thermal_zone0/temp','45000')
-        put('/sys/class/devfreq/gpu/cur_freq','600000000')
+        from gpu_opp import CHANGES
+        for (node,name),value in CHANGES.items():
+            path=self.path('/proc/device-tree'+node+'/'+name);path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(struct.pack('>I',value))
+        put('/usr/share/opi-3w-wbuild/gpu-opp.json',json.dumps({'frequency_hz':1008000000,'voltage_uv':960000,
+            'changes':[{'node':node,'property':name,'value':value} for (node,name),value in CHANGES.items()]}))
+        put('/sys/class/regulator/regulator.6/name','axp8191-dcdc4')
+        put('/sys/class/regulator/regulator.6/microvolts','960000')
+        put('/sys/kernel/debug/clk/clk_summary','gpu0 1 1 0 1008000000 0\n')
     def run(self,*args):
         self.calls.append(args);code=0;out=''
         if args==('uname','-m'):out='aarch64\n'
@@ -131,7 +138,7 @@ class VerificationTests(unittest.TestCase):
     def test_preserved_uuid_rootdev_is_supported(self):
         def modify(s):
             s.path('/boot/orangepiEnv.txt').write_text('rootdev=UUID=root-uuid\nfdtfile=allwinner/sun60i-a733-orangepi-zero3w.dtb\n')
-            s.path('/usr/share/opi-3w-wbuild/vendor-boot.json').write_text(json.dumps(boot_snapshot(s.root)))
+            s.path('/usr/share/opi-3w-wbuild/configured-boot.json').write_text(json.dumps(boot_snapshot(s.root)))
         report,_=self.exercise(modify)
         self.assertTrue(report['build_passed'],report['checks'])
     def test_vendor_mislabeled_zero3w_profile_passes_with_warning(self):
@@ -151,7 +158,7 @@ class VerificationTests(unittest.TestCase):
     def test_wrong_selected_dtb_is_rejected(self):
         def modify(s):
             s.path('/boot/orangepiEnv.txt').write_text('rootdev=UUID=root-uuid\nfdtfile=allwinner/sun60i-a733-orangepi-4-pro.dtb\n')
-            s.path('/usr/share/opi-3w-wbuild/vendor-boot.json').write_text(json.dumps(boot_snapshot(s.root)))
+            s.path('/usr/share/opi-3w-wbuild/configured-boot.json').write_text(json.dumps(boot_snapshot(s.root)))
         report,calls=self.exercise(modify)
         self.assertFalse(report['build_passed']);self.assertFalse(any(c[0]=='timeout' for c in calls))
     def test_vendor_os_identity_is_not_accepted_as_fresh_debian(self):

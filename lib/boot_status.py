@@ -39,7 +39,7 @@ def write_status(stage, detail='', root=Path('/'), mounted=os.path.ismount):
         except (ValueError, KeyError, TypeError): pass
     history.append(dict(time=now, stage=stage, detail=detail))
     atomic(history_file, json.dumps(dict(boot_id=boot_id,stages=history),indent=2)+'\n')
-    text = 'opi-3w-wbuild 0.7.5 boot\nBoot ID: ' + boot_id + '\n'
+    text = 'opi-3w-wbuild 0.7.6 boot\nBoot ID: ' + boot_id + '\n'
     text += '\n'.join(item['time']+' '+item['stage']+(' '+item['detail'] if item['detail'] else '') for item in history)+'\n'
     atomic(config / 'BOOT-STATUS.TXT', text)
 

@@ -72,7 +72,7 @@ class Verification:
             and self.hash_file('/boot/dtb/'+dtb)==profile.get('dtb_sha256')
             and model==profile.get('model') and actual_compatible==profile.get('compatible')
             and architecture['code']==0 and architecture['output'].strip()=='aarch64')
-        self.add('board','PASS' if ok else 'FAIL','Live DT metadata and selected Zero 3W DTB must match the recorded vendor profile')
+        self.add('board','PASS' if ok else 'FAIL','Live DT metadata and selected Zero 3W DTB must match the recorded image profile')
         if ok and 'xunlong,orangepi-4-pro' in actual_compatible:
             self.add('vendor_board_label','WARN','Vendor Zero 3W DTS contains the 4-Pro compatibility label; DTB selection and hash were checked')
         os_release=s.text('/etc/os-release')
@@ -86,9 +86,9 @@ class Verification:
         ok=release['code']==0 and release['output'].strip()==manifest['kernel_abi']
         self.add('kernel','PASS' if ok else 'FAIL','Running kernel must match PowerVR manifest: '+manifest['kernel_abi'])
     def ramdisk(self):
-        expected=json.loads(self.system.text('/usr/share/opi-3w-wbuild/vendor-boot.json'))
+        expected=json.loads(self.system.text('/usr/share/opi-3w-wbuild/configured-boot.json'))
         verify_boot(self.system.root,expected)
-        self.add('vendor_boot','PASS','All donor /boot files and symlinks remain unchanged')
+        self.add('vendor_boot','PASS','All image /boot files and symlinks match the configured manifest; original donor hashes retained')
     def provision(self):
         s=self.system
         for name in ('configured',):
@@ -192,6 +192,36 @@ class Verification:
         self.report['gpu_capabilities']['ddk_version_canonical']=canonical
         ok=result['code']==0 and canonical==EXPECTED_DDK
         self.add('loaded_gpu_ddk','PASS' if ok else 'FAIL',result['output'].strip())
+        self.gpu_operating_point()
+    def gpu_operating_point(self):
+        s=self.system
+        metadata=json.loads(s.text('/usr/share/opi-3w-wbuild/gpu-opp.json'))
+        configured=metadata.get('frequency_hz')==1008000000 and metadata.get('voltage_uv')==960000
+        live={}
+        for item in metadata['changes']:
+            raw=s.path('/proc/device-tree'+item['node']+'/'+item['property']).read_bytes()
+            value=int.from_bytes(raw,'big') if len(raw)==4 else None
+            live[item['node']+'/'+item['property']]=value
+            configured=configured and value==item['value']
+        state={'configured':configured,'live_dt_values':live,'confirmed':False}
+        self.report['gpu_operating_point']=state
+        self.add('gpu_operating_point_configuration','PASS' if configured else 'FAIL','Live GPU DT settings must specify 1008 MHz and 960 mV')
+        volts=[]
+        for path in s.path('/sys/class/regulator').glob('regulator.*'):
+            try:
+                if (path/'name').read_text().strip()=='axp8191-dcdc4':volts.append(int((path/'microvolts').read_text().strip()))
+            except OSError:pass
+        frequency=None
+        try:
+            for line in s.text('/sys/kernel/debug/clk/clk_summary').splitlines():
+                fields=line.split()
+                if fields and fields[0]=='gpu0':frequency=int(fields[4])
+        except OSError:pass
+        state.update(regulator_microvolts=volts,gpu_clock_hz=frequency)
+        bad=(bool(volts) and volts!=[960000]) or (frequency is not None and frequency!=1008000000)
+        state['confirmed']=configured and volts==[960000] and frequency==1008000000
+        status='FAIL' if bad else 'PASS' if state['confirmed'] else 'WARN'
+        self.add('gpu_operating_point_readback',status,'Reported regulator and GPU clock: '+json.dumps(state)+'; unreadable interfaces are not a confirmed operating point')
     def npu(self):
         self.report['npu_inference_validated']=False
         self.report['npu']={'device_present':self.system.exists('/dev/vipcore'),
